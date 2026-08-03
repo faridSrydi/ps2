@@ -9,7 +9,7 @@ export default function GameCard({ game, onFavorite, isFavorited }) {
   const coverUrl = game.coverPath || '/placeholder-cover.svg';
 
   return (
-    <Link to={`/game/${game.id}`} className="game-card animate-fade-in">
+    <Link to={`/game/${game.id}`} className="game-card group animate-fade-in">
       {/* Cover Image */}
       <div className="relative overflow-hidden">
         <div className="aspect-[3/4] bg-ps2-darker">

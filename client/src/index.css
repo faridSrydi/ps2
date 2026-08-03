@@ -111,7 +111,7 @@
   .game-card {
     @apply glass-card overflow-hidden cursor-pointer
            hover:border-ps2-accent/50 hover:shadow-ps2-accent/10
-           transition-all duration-300 group;
+           transition-all duration-300;
   }
 
   .game-card:hover .game-card-image {

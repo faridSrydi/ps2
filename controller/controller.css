@@ -1,0 +1,283 @@
+/* ============================================================
+   PS2 Cloud Gaming Platform — Mobile Gamepad Styles
+   ============================================================ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+body {
+  background-color: #060a12;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Overlay / Pairing Modal ─────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 23, 0.95);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.card {
+  background: #111827;
+  border: 1px solid #1e293b;
+  border-radius: 20px;
+  padding: 30px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.card h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.card p {
+  color: #94a3b8;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.input-group input {
+  flex: 1;
+  background: #060a12;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px;
+  color: #fff;
+  font-size: 18px;
+  font-family: monospace;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.input-group button {
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.status {
+  font-size: 13px;
+  color: #f59e0b;
+}
+
+/* ─── Main Gamepad Layout ─────────────────────────────── */
+.gamepad-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding: 15px;
+  gap: 15px;
+  background: radial-gradient(circle at center, #111827 0%, #060a12 100%);
+}
+
+.gamepad-container.hidden {
+  display: none;
+}
+
+/* ─── Shoulder Row ────────────────────────────────────── */
+.shoulder-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shoulder-row .group {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-shoulder {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.btn-shoulder:active {
+  background: #6366f1;
+  color: #fff;
+}
+
+.center-status {
+  font-size: 11px;
+  font-weight: bold;
+  color: #22c55e;
+  letter-spacing: 1px;
+}
+
+/* ─── Controls Row ────────────────────────────────────── */
+.controls-row {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* D-Pad */
+.dpad-container {
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dpad {
+  position: relative;
+  width: 150px;
+  height: 150px;
+}
+
+.dpad-btn {
+  position: absolute;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #fff;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dpad-up { top: 0; left: 50px; width: 50px; height: 55px; border-radius: 12px 12px 0 0; }
+.dpad-down { bottom: 0; left: 50px; width: 50px; height: 55px; border-radius: 0 0 12px 12px; }
+.dpad-left { left: 0; top: 50px; width: 55px; height: 50px; border-radius: 12px 0 0 12px; }
+.dpad-right { right: 0; top: 50px; width: 55px; height: 50px; border-radius: 0 12px 12px 0; }
+.dpad-center { position: absolute; top: 50px; left: 50px; width: 50px; height: 50px; background: #0f172a; }
+
+.dpad-btn:active {
+  background: #6366f1;
+}
+
+/* Action Buttons (Triangle, Circle, Cross, Square) */
+.action-buttons {
+  position: relative;
+  width: 160px;
+  height: 160px;
+}
+
+.action-btn {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 2px solid #334155;
+  font-size: 20px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.btn-triangle { top: 0; left: 54px; color: #10b981; border-color: #10b981; }
+.btn-circle { top: 54px; right: 0; color: #ef4444; border-color: #ef4444; }
+.btn-cross { bottom: 0; left: 54px; color: #3b82f6; border-color: #3b82f6; }
+.btn-square { top: 54px; left: 0; color: #ec4899; border-color: #ec4899; }
+
+.action-btn:active {
+  transform: scale(0.92);
+  filter: brightness(1.3);
+}
+
+/* Center Controls (System + Analogs) */
+.center-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.system-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.btn-pill {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.btn-pill:active {
+  background: #6366f1;
+  color: #fff;
+}
+
+/* Analog Sticks */
+.analogs-container {
+  display: flex;
+  gap: 30px;
+}
+
+.analog-stick-box {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: #0f172a;
+  border: 2px solid #1e293b;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.stick-label {
+  font-size: 10px;
+  color: #475569;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.analog-stick-knob {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #334155, #1e293b);
+  border: 1px solid #475569;
+  position: absolute;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}

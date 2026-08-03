@@ -1,0 +1,45 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Builds
+dist/
+build/
+.output/
+
+# Environment & Secrets
+.env
+.env.local
+.env.production
+*.pem
+
+# Data directories (exclude contents, keep folder structure via .gitkeep)
+games/*
+!games/.gitkeep
+bios/*
+!bios/.gitkeep
+saves/*
+!saves/.gitkeep
+covers/*
+!covers/.gitkeep
+screenshots/*
+!screenshots/.gitkeep
+config/pcsx2/*
+!config/pcsx2/.gitkeep
+logs/*
+!logs/.gitkeep
+storage/*
+!storage/.gitkeep
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Prisma
+/server/prisma/migrations/

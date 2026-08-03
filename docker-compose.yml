@@ -1,0 +1,91 @@
+# ============================================================
+# PS2 Cloud Gaming Platform — Docker Compose
+# Usage: docker compose up -d
+# ============================================================
+
+services:
+  # ─── PostgreSQL Database ─────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ps2-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ps2cloud
+      POSTGRES_USER: ps2user
+      POSTGRES_PASSWORD: ps2password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ps2user -d ps2cloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend API Server ──────────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ps2-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://ps2user:ps2password@postgres:5432/ps2cloud?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      GAMES_DIR: /app/games
+      BIOS_DIR: /app/bios
+      SAVES_DIR: /app/saves
+      COVERS_DIR: /app/covers
+      SCREENSHOTS_DIR: /app/screenshots
+      CONFIG_DIR: /app/config
+      LOGS_DIR: /app/logs
+      STORAGE_DIR: /app/storage
+    ports:
+      - "3000:3000"
+      - "10000-10100:10000-10100/udp"  # WebRTC UDP ports
+    volumes:
+      - ./games:/app/games:ro            # Game ISOs (read-only)
+      - ./bios:/app/bios:ro             # PS2 BIOS (read-only)
+      - ./saves:/app/saves               # Save states
+      - ./covers:/app/covers             # Cover art
+      - ./screenshots:/app/screenshots   # Screenshots
+      - ./config:/app/config             # PCSX2 configs
+      - ./logs:/app/logs                 # Application logs
+      - ./storage:/app/storage           # General storage
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ─── Nginx Reverse Proxy ────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: ps2-nginx
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./client/dist:/usr/share/nginx/html:ro   # Built frontend
+      - ./controller:/usr/share/nginx/controller:ro  # Controller page
+      - ./covers:/usr/share/nginx/covers:ro       # Cover images
+      - ./screenshots:/usr/share/nginx/screenshots:ro
+      # Uncomment for SSL:
+      # - ./nginx/ssl:/etc/nginx/ssl:ro
+
+volumes:
+  postgres_data:

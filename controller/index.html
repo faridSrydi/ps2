@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>PS2 Virtual Gamepad</title>
+    <link rel="stylesheet" href="controller.css" />
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  </head>
+  <body>
+    <!-- Pairing Overlay -->
+    <div id="pairing-overlay" class="overlay">
+      <div class="card">
+        <h2>🎮 PS2 Gamepad</h2>
+        <p>Enter the 8-character Room ID from your screen</p>
+        <div class="input-group">
+          <input type="text" id="room-input" placeholder="ABCD-1234" maxlength="9" autocomplete="off" />
+          <button id="connect-btn">Connect</button>
+        </div>
+        <div id="status-msg" class="status"></div>
+      </div>
+    </div>
+
+    <!-- Main Gamepad Layout -->
+    <div id="gamepad" class="gamepad-container hidden">
+      <!-- Top Row: Shoulder Buttons -->
+      <div class="shoulder-row">
+        <div class="group">
+          <button class="btn btn-shoulder" data-btn="l2">L2</button>
+          <button class="btn btn-shoulder" data-btn="l1">L1</button>
+        </div>
+        <div class="center-status" id="connection-indicator">CONNECTED</div>
+        <div class="group">
+          <button class="btn btn-shoulder" data-btn="r1">R1</button>
+          <button class="btn btn-shoulder" data-btn="r2">R2</button>
+        </div>
+      </div>
+
+      <!-- Main Controls Row -->
+      <div class="controls-row">
+        <!-- Left: D-Pad -->
+        <div class="dpad-container">
+          <div class="dpad">
+            <button class="btn dpad-btn dpad-up" data-btn="dpad_up">▲</button>
+            <button class="btn dpad-btn dpad-left" data-btn="dpad_left">◀</button>
+            <button class="btn dpad-btn dpad-right" data-btn="dpad_right">▶</button>
+            <button class="btn dpad-btn dpad-down" data-btn="dpad_down">▼</button>
+            <div class="dpad-center"></div>
+          </div>
+        </div>
+
+        <!-- Center: System Buttons & Analogs -->
+        <div class="center-controls">
+          <div class="system-buttons">
+            <button class="btn btn-pill" data-btn="select">SELECT</button>
+            <button class="btn btn-pill" data-btn="start">START</button>
+          </div>
+
+          <div class="analogs-container">
+            <div class="analog-stick-box" id="analog-left-box">
+              <div class="stick-label">L3</div>
+              <div class="analog-stick-knob" id="analog-left-knob"></div>
+            </div>
+            <div class="analog-stick-box" id="analog-right-box">
+              <div class="stick-label">R3</div>
+              <div class="analog-stick-knob" id="analog-right-knob"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Action Buttons (Triangle, Circle, Cross, Square) -->
+        <div class="action-buttons">
+          <button class="btn action-btn btn-triangle" data-btn="triangle">△</button>
+          <button class="btn action-btn btn-circle" data-btn="circle">○</button>
+          <button class="btn action-btn btn-cross" data-btn="cross">✕</button>
+          <button class="btn action-btn btn-square" data-btn="square">□</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="controller.js"></script>
+  </body>
+</html>

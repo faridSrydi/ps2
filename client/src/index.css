@@ -1,0 +1,177 @@
+/* ============================================================
+   PS2 Cloud Gaming Platform — Global Styles
+   Tailwind CSS + Custom Design System
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base Styles ──────────────────────────────────────── */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+
+  ::selection {
+    background: rgba(99, 102, 241, 0.3);
+    color: #fff;
+  }
+
+  body {
+    @apply bg-ps2-dark text-gray-100 font-sans;
+    min-height: 100vh;
+  }
+}
+
+/* ─── Component Styles ─────────────────────────────────── */
+@layer components {
+  /* Glassmorphism card */
+  .glass-card {
+    @apply bg-ps2-card/80 backdrop-blur-xl border border-ps2-border/50
+           rounded-2xl shadow-xl shadow-black/20;
+  }
+
+  /* Accent glow button */
+  .btn-primary {
+    @apply bg-ps2-accent hover:bg-indigo-500 text-white font-semibold
+           px-6 py-3 rounded-xl transition-all duration-200
+           hover:shadow-lg hover:shadow-ps2-accent/30
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-ps2-card hover:bg-gray-700 text-gray-200 font-medium
+           px-5 py-2.5 rounded-xl border border-ps2-border
+           transition-all duration-200 active:scale-95;
+  }
+
+  .btn-danger {
+    @apply bg-red-600/20 hover:bg-red-600/40 text-red-400
+           font-medium px-5 py-2.5 rounded-xl border border-red-500/30
+           transition-all duration-200 active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply text-gray-400 hover:text-white hover:bg-white/5
+           px-4 py-2 rounded-xl transition-all duration-200;
+  }
+
+  /* Input field */
+  .input-field {
+    @apply bg-ps2-darker border border-ps2-border text-white
+           px-4 py-3 rounded-xl w-full
+           placeholder:text-gray-500
+           focus:outline-none focus:ring-2 focus:ring-ps2-accent/50 focus:border-ps2-accent
+           transition-all duration-200;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full
+           text-xs font-medium;
+  }
+
+  .badge-accent {
+    @apply badge bg-ps2-accent/20 text-ps2-glow;
+  }
+
+  .badge-success {
+    @apply badge bg-green-500/20 text-green-400;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-500/20 text-yellow-400;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-500/20 text-red-400;
+  }
+
+  /* Game card hover effect */
+  .game-card {
+    @apply glass-card overflow-hidden cursor-pointer
+           hover:border-ps2-accent/50 hover:shadow-ps2-accent/10
+           transition-all duration-300 group;
+  }
+
+  .game-card:hover .game-card-image {
+    @apply scale-105;
+  }
+
+  .game-card-image {
+    @apply w-full aspect-[3/4] object-cover transition-transform duration-500;
+  }
+
+  /* Section header */
+  .section-header {
+    @apply font-display text-2xl font-bold text-white mb-6
+           flex items-center gap-3;
+  }
+
+  /* Stat card for admin dashboard */
+  .stat-card {
+    @apply glass-card p-5 flex flex-col gap-2;
+  }
+
+  .stat-value {
+    @apply font-display text-3xl font-bold text-white;
+  }
+
+  .stat-label {
+    @apply text-sm text-gray-400 font-medium;
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl
+           text-gray-400 hover:text-white hover:bg-white/5
+           transition-all duration-200 font-medium;
+  }
+
+  .nav-item.active {
+    @apply text-white bg-ps2-accent/10 border-l-2 border-ps2-accent;
+  }
+}
+
+/* ─── Utilities ────────────────────────────────────────── */
+@layer utilities {
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-gradient-to-r from-ps2-accent to-purple-400
+           bg-clip-text text-transparent;
+  }
+
+  /* Neon glow effect */
+  .neon-glow {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.4),
+                0 0 45px rgba(99, 102, 241, 0.15);
+  }
+
+  /* Subtle mesh gradient background */
+  .bg-mesh {
+    background:
+      radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.06) 0, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(99, 102, 241, 0.04) 0, transparent 50%);
+  }
+}

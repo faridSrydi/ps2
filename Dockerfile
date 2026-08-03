@@ -55,8 +55,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── PCSX2 ────────────────────────────────────────────────
-# Install PCSX2 via official v2.0.2 AppImage (extracted to bypass FUSE requirements in Docker)
-RUN curl -fsSL -o /tmp/pcsx2.AppImage "https://github.com/PCSX2/pcsx2/releases/download/v2.0.2/pcsx2-v2.0.2-linux-appimage-x64.AppImage" \
+# Fetch latest PCSX2 AppImage release automatically via GitHub API
+RUN PCSX2_URL=$(curl -s https://api.github.com/repos/PCSX2/pcsx2/releases/latest | jq -r '.assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' | head -n 1) \
+    && echo "Downloading PCSX2 from: $PCSX2_URL" \
+    && curl -fsSL -o /tmp/pcsx2.AppImage "$PCSX2_URL" \
     && chmod +x /tmp/pcsx2.AppImage \
     && cd /tmp && ./pcsx2.AppImage --appimage-extract \
     && mv /tmp/squashfs-root /opt/pcsx2 \

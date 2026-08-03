@@ -8,10 +8,15 @@
 set -e
 
 echo "[deploy] Building frontend..."
-cd client
-npm install
-npm run build
-cd ..
+if command -v npm &> /dev/null; then
+    cd client
+    npm install
+    npm run build
+    cd ..
+else
+    echo "[deploy] npm not found on host. Building frontend via Docker..."
+    docker run --rm -v "$(pwd)/client:/app" -w /app node:22-alpine sh -c "npm install && npm run build"
+fi
 
 echo "[deploy] Starting Docker Compose services..."
 docker compose down

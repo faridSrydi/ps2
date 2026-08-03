@@ -70,7 +70,7 @@ WORKDIR /app
 
 # ─── Install Server Dependencies ──────────────────────────
 COPY server/package.json server/package-lock.json* ./server/
-RUN cd server && npm ci --omit=dev
+RUN cd server && npm install --omit=dev
 
 # ─── Copy Prisma Schema & Generate Client ─────────────────
 COPY server/prisma ./server/prisma/

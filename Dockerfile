@@ -61,8 +61,7 @@ RUN curl -L -o /tmp/pcsx2.AppImage "https://github.com/PCSX2/pcsx2/releases/down
     && cd /tmp && ./pcsx2.AppImage --appimage-extract \
     && mv /tmp/squashfs-root /opt/pcsx2 \
     && ln -s /opt/pcsx2/AppRun /usr/bin/pcsx2-qt \
-    && rm -f /tmp/pcsx2.AppImage \
-    || (apt-get update && apt-get install -y pcsx2 && rm -rf /var/lib/apt/lists/*)
+    && rm -f /tmp/pcsx2.AppImage
 
 # ─── Working Directory ────────────────────────────────────
 WORKDIR /app

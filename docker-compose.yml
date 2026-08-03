@@ -49,7 +49,7 @@ services:
       LOGS_DIR: /app/logs
       STORAGE_DIR: /app/storage
     ports:
-      - "3000:3000"
+      - "3001:3000"
       - "10000-10100:10000-10100/udp"  # WebRTC UDP ports
     volumes:
       - ./games:/app/games:ro            # Game ISOs (read-only)

@@ -80,7 +80,7 @@ def on_answer_created(promise, user_data):
 
         webrtc.emit("set-local-description", answer, None)
 
-        sdp_text = answer.as_text()
+        sdp_text = answer.sdp.as_text()
         sys.stderr.write("✓ SDP answer created successfully\n")
         sys.stderr.flush()
         send_json({

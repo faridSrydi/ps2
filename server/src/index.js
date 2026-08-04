@@ -40,6 +40,7 @@ const server = http.createServer(app);
 
 // ─── Initialize Socket.io ────────────────────────────────
 const io = initializeSocket(server);
+app.set('io', io);  // Make io accessible in controllers via req.app.get('io')
 
 // ─── Middleware ──────────────────────────────────────────
 app.use(helmet({

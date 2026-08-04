@@ -82,10 +82,9 @@ RUN cd server && npm install --omit=dev
 COPY server/prisma ./server/prisma/
 RUN cd server && npx prisma generate
 
-# ─── Copy Server Source ───────────────────────────────────
+# ─── Copy Server Source & Scripts ─────────────────────────
 COPY server/src ./server/src/
-
-# ─── Copy Controller Files ────────────────────────────────
+COPY scripts ./scripts/
 COPY controller ./controller/
 
 # ─── Create Data Directories ──────────────────────────────

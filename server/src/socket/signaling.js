@@ -3,7 +3,7 @@
 // Handles SDP offer/answer and ICE candidate exchange
 // ============================================================
 
-import { handleOffer, handleIceCandidate } from '../services/streaming.service.js';
+import { handleOffer, handleIceCandidate, isStreamActive } from '../services/streaming.service.js';
 import logger from '../utils/logger.js';
 
 // Track which socket is viewing which session
@@ -38,6 +38,12 @@ export function setupSignaling(io, socket) {
       socketId: socket.id,
       username: socket.user?.username,
     });
+
+    // If stream pipeline is already active, emit stream:ready directly to joining socket
+    if (isStreamActive(sessionId)) {
+      logger.info(`[signaling] Stream already active for ${sessionId}, emitting stream:ready to socket ${socket.id}`);
+      socket.emit('stream:ready', { sessionId });
+    }
   });
 
   /**

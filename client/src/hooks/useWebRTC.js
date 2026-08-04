@@ -172,6 +172,92 @@ export function useWebRTC(socket, sessionId) {
       }
     };
 
+    const handleServerOffer = async ({ sdp }) => {
+      console.log('[webrtc] signal:offer received from server');
+      try {
+        if (peerRef.current) {
+          peerRef.current.close();
+          peerRef.current = null;
+        }
+
+        hasRemoteDescription.current = false;
+        pendingIceCandidates.current = [];
+        setErrorReason(null);
+        setStreamState('connecting');
+
+        const pc = new RTCPeerConnection({
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+          ],
+          iceCandidatePoolSize: 10,
+        });
+
+        peerRef.current = pc;
+
+        pc.onconnectionstatechange = () => {
+          console.log(`[webrtc] connectionState: ${pc.connectionState}`);
+          if (pc.connectionState === 'connected') {
+            setStreamState('connected');
+          } else if (pc.connectionState === 'failed') {
+            setStreamState('error');
+            setErrorReason('DTLS failed');
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          console.log(`[webrtc] iceConnectionState: ${pc.iceConnectionState}`);
+          if (pc.iceConnectionState === 'failed') {
+            setStreamState('error');
+            setErrorReason('ICE timeout');
+          }
+        };
+
+        pc.ontrack = (event) => {
+          console.log('[webrtc] Track received:', event.track.kind);
+          if (videoRef.current && event.streams[0]) {
+            videoRef.current.srcObject = event.streams[0];
+            setStreamState('connected');
+          }
+        };
+
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('signal:ice-candidate', {
+              sessionId,
+              candidate: event.candidate,
+            });
+          }
+        };
+
+        console.log('[webrtc] Setting remote description (server offer)...');
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        hasRemoteDescription.current = true;
+
+        console.log('[webrtc] Creating answer...');
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        console.log('[webrtc] Emitting signal:answer to server');
+        socket.emit('signal:answer', {
+          sessionId,
+          sdp: {
+            type: pc.localDescription.type,
+            sdp: pc.localDescription.sdp,
+          },
+        });
+
+        for (const candidate of pendingIceCandidates.current) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+        pendingIceCandidates.current = [];
+      } catch (err) {
+        console.error('[webrtc] Failed to handle server offer:', err);
+        setStreamState('error');
+        setErrorReason(`Server offer failed: ${err.message}`);
+      }
+    };
+
     const handleIceCandidate = async ({ candidate }) => {
       console.log('[webrtc] signal:ice-candidate received');
       const pc = peerRef.current;
@@ -191,11 +277,13 @@ export function useWebRTC(socket, sessionId) {
     };
 
     socket.on('stream:ready', handleStreamReady);
+    socket.on('signal:offer', handleServerOffer);
     socket.on('signal:answer', handleAnswer);
     socket.on('signal:ice-candidate', handleIceCandidate);
 
     return () => {
       socket.off('stream:ready', handleStreamReady);
+      socket.off('signal:offer', handleServerOffer);
       socket.off('signal:answer', handleAnswer);
       socket.off('signal:ice-candidate', handleIceCandidate);
     };

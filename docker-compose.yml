@@ -1,6 +1,6 @@
 # ============================================================
-# PS2 Cloud Gaming Platform — Docker Compose
-# Usage: docker compose up -d
+# PS2 Cloud Gaming Platform — Docker Compose (Host Networking)
+# Usage: docker compose up -d --build
 # ============================================================
 
 services:
@@ -19,24 +19,25 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ps2user -d ps2cloud"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
 
-  # ─── Backend API Server ──────────────────────────────────
+  # ─── Backend API Server & Emulator Container ─────────────
   server:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ps2-server
     restart: unless-stopped
+    network_mode: "host"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://ps2user:ps2password@postgres:5432/ps2cloud?schema=public
+      DATABASE_URL: postgresql://ps2user:ps2password@127.0.0.1:5432/ps2cloud?schema=public
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-production}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
@@ -48,9 +49,6 @@ services:
       CONFIG_DIR: /app/config
       LOGS_DIR: /app/logs
       STORAGE_DIR: /app/storage
-    ports:
-      - "3001:3000"
-      - "10000-10100:10000-10100/udp"  # WebRTC UDP ports
     volumes:
       - ./games:/app/games:ro            # Game ISOs (read-only)
       - ./bios:/app/bios:ro             # PS2 BIOS (read-only)
@@ -74,19 +72,15 @@ services:
     image: nginx:alpine
     container_name: ps2-nginx
     restart: unless-stopped
+    network_mode: "host"
     depends_on:
       - server
-    ports:
-      - "8080:80"
-      - "8443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./client/dist:/usr/share/nginx/html:ro   # Built frontend
+      - ./client/dist:/usr/share/nginx/html:ro       # Built frontend
       - ./controller:/usr/share/nginx/controller:ro  # Controller page
-      - ./covers:/usr/share/nginx/covers:ro       # Cover images
+      - ./covers:/usr/share/nginx/covers:ro           # Cover images
       - ./screenshots:/usr/share/nginx/screenshots:ro
-      # Uncomment for SSL:
-      # - ./nginx/ssl:/etc/nginx/ssl:ro
 
 volumes:
   postgres_data:

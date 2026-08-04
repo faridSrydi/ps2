@@ -104,6 +104,59 @@ def on_remote_desc_set(promise, user_data):
         sys.stderr.write(f"Err setting remote description: {e}\n")
         sys.stderr.flush()
 
+def on_offer_created(promise, user_data):
+    try:
+        reply = promise.get_reply()
+        if not reply or not reply.has_field("offer"):
+            sys.stderr.write("Err: No offer field in promise reply\n")
+            sys.stderr.flush()
+            return
+
+        offer = reply.get_value("offer")
+        promise_local = Gst.Promise.new_with_change_func(on_local_desc_set, None)
+        webrtc.emit("set-local-description", offer, promise_local)
+
+        sdp_text = offer.sdp.as_text()
+        sys.stderr.write("✓ GStreamer created SDP offer successfully\n")
+        sys.stderr.flush()
+        send_json({
+            "type": "offer",
+            "sdp": {
+                "type": "offer",
+                "sdp": sdp_text,
+            }
+        })
+    except Exception as e:
+        sys.stderr.write(f"Err in on_offer_created: {e}\n")
+        sys.stderr.flush()
+
+def on_negotiation_needed(element):
+    sys.stderr.write("✓ GStreamer on-negotiation-needed: Creating offer...\n")
+    sys.stderr.flush()
+    promise = Gst.Promise.new_with_change_func(on_offer_created, None)
+    webrtc.emit("create-offer", None, promise)
+
+webrtc.connect("on-negotiation-needed", on_negotiation_needed)
+
+def handle_answer(sdp_info):
+    try:
+        sys.stderr.write("Handling WebRTC answer from client...\n")
+        sys.stderr.flush()
+        sdp_text = sdp_info.get("sdp", "")
+        res, sdp_msg = GstSdp.SDPMessage.new()
+        GstSdp.sdp_message_parse_buffer(bytes(sdp_text, 'utf-8'), sdp_msg)
+        
+        answer = GstWebRTC.WebRTCSessionDescription.new(
+            GstWebRTC.WebRTCSDPType.ANSWER, sdp_msg
+        )
+
+        promise_remote = Gst.Promise.new_with_change_func(on_remote_desc_set, None)
+        webrtc.emit("set-remote-description", answer, promise_remote)
+    except Exception as e:
+        sys.stderr.write(f"Err handling answer: {e}\n")
+        sys.stderr.flush()
+    return False
+
 def on_answer_created(promise, user_data):
     try:
         sys.stderr.write("Creating SDP answer...\n")
@@ -157,9 +210,8 @@ def handle_offer(sdp_info):
 
 def handle_ice(candidate_info):
     try:
-        cand = candidate_info.get("candidate", {})
-        c_str = cand.get("candidate", "")
-        mline = cand.get("sdpMLineIndex", 0)
+        c_str = candidate_info.get("candidate", "")
+        mline = candidate_info.get("sdpMLineIndex", 0)
         if c_str:
             webrtc.emit("add-ice-candidate", mline, c_str)
     except Exception as e:
@@ -168,21 +220,21 @@ def handle_ice(candidate_info):
     return False
 
 def read_stdin():
-    for line in sys.stdin:
-        line = line.strip()
+    while True:
+        line = sys.stdin.readline()
         if not line:
-            continue
+            break
         try:
             msg = json.loads(line)
-            mtype = msg.get("type")
-            if mtype == "offer":
-                sys.stderr.write("Received offer on stdin, scheduling on GLib main loop...\n")
-                sys.stderr.flush()
+            msg_type = msg.get("type")
+            if msg_type == "offer":
                 GLib.idle_add(handle_offer, msg.get("sdp", {}))
-            elif mtype == "ice":
-                GLib.idle_add(handle_ice, msg)
+            elif msg_type == "answer":
+                GLib.idle_add(handle_answer, msg.get("sdp", {}))
+            elif msg_type == "ice":
+                GLib.idle_add(handle_ice, msg.get("candidate", {}))
         except Exception as e:
-            sys.stderr.write(f"Err processing stdin: {e}\n")
+            sys.stderr.write(f"Err parsing stdin json: {e}\n")
             sys.stderr.flush()
 
 # Log pipeline errors

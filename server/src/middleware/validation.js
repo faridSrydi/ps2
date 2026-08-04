@@ -75,16 +75,20 @@ export const pairControllerRules = [
 
 export const searchGamesRules = [
   query('q')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .isLength({ min: 1, max: 100 })
     .withMessage('Search query must be 1-100 characters'),
+  query('genre')
+    .optional({ checkFalsy: true }),
+  query('region')
+    .optional({ checkFalsy: true }),
   query('page')
-    .optional()
+    .optional({ checkFalsy: true })
     .isInt({ min: 1 })
     .withMessage('Page must be a positive integer'),
   query('limit')
-    .optional()
+    .optional({ checkFalsy: true })
     .isInt({ min: 1, max: 50 })
     .withMessage('Limit must be 1-50'),
 ];

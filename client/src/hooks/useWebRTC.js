@@ -10,170 +10,23 @@ export function useWebRTC(socket, sessionId) {
   const hasRemoteDescription = useRef(false);
   const pendingIceCandidates = useRef([]);
 
-  // Create peer connection and send offer
-  const createAndSendOffer = useCallback(async () => {
-    if (!socket || !sessionId) return;
-
-    try {
-      console.log('[webrtc] Creating RTCPeerConnection...');
-      if (peerRef.current) {
-        console.log('[webrtc] Cleaning up existing PeerConnection');
-        peerRef.current.close();
-        peerRef.current = null;
-      }
-
-      hasRemoteDescription.current = false;
-      pendingIceCandidates.current = [];
-      setErrorReason(null);
-      setStreamState('connecting');
-
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-        iceCandidatePoolSize: 10,
-      });
-
-      peerRef.current = pc;
-
-      pc.onconnectionstatechange = () => {
-        console.log(`[webrtc] connectionState: ${pc.connectionState}`);
-        if (pc.connectionState === 'connected') {
-          setStreamState('connected');
-        } else if (pc.connectionState === 'failed') {
-          setStreamState('error');
-          if (!hasRemoteDescription.current) {
-            setErrorReason('RemoteDescription missing');
-          } else if (pc.iceConnectionState === 'failed') {
-            setErrorReason('ICE timeout / connection failed');
-          } else {
-            setErrorReason('DTLS failed');
-          }
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log(`[webrtc] iceConnectionState: ${pc.iceConnectionState}`);
-        if (pc.iceConnectionState === 'failed') {
-          setStreamState('error');
-          setErrorReason('ICE timeout');
-        }
-      };
-
-      pc.onsignalingstatechange = () => {
-        console.log(`[webrtc] signalingState: ${pc.signalingState}`);
-      };
-
-      pc.onicegatheringstatechange = () => {
-        console.log(`[webrtc] iceGatheringState: ${pc.iceGatheringState}`);
-      };
-
-      pc.ontrack = (event) => {
-        console.log('[webrtc] Track received:', event.track.kind);
-        if (videoRef.current && event.streams[0]) {
-          videoRef.current.srcObject = event.streams[0];
-          setStreamState('connected');
-        }
-      };
-
-      pc.onicecandidate = (event) => {
-        console.log('[webrtc] ICE candidate gathered:', event.candidate ? event.candidate.candidate : 'null');
-        if (event.candidate) {
-          socket.emit('signal:ice-candidate', {
-            sessionId,
-            candidate: event.candidate,
-          });
-        }
-      };
-
-      // Add transceivers for receiving video and audio
-      pc.addTransceiver('video', { direction: 'recvonly' });
-      pc.addTransceiver('audio', { direction: 'recvonly' });
-
-      // Create offer
-      console.log('[webrtc] Creating SDP offer...');
-      const offer = await pc.createOffer();
-      console.log('[webrtc] Setting local description...');
-      await pc.setLocalDescription(offer);
-
-      console.log('[webrtc] Emitting signal:offer to server');
-      socket.emit('signal:offer', {
-        sessionId,
-        sdp: {
-          type: pc.localDescription.type,
-          sdp: pc.localDescription.sdp,
-        },
-      });
-    } catch (err) {
-      console.error('[webrtc] Error creating offer:', err);
-      setStreamState('error');
-      setErrorReason(`Offer creation failed: ${err.message}`);
-    }
-  }, [socket, sessionId]);
-
-  // Start stream
+  // Join session room saja (Tanpa membuat Offer)
   const startStream = useCallback(() => {
     if (!socket || !sessionId) return;
 
-    console.log('[webrtc] Starting stream for session:', sessionId);
+    console.log('[webrtc] Joining session:', sessionId);
+    setStreamState('connecting');
+    setErrorReason(null);
     socket.emit('session:join', { sessionId });
-    createAndSendOffer();
-  }, [socket, sessionId, createAndSendOffer]);
+  }, [socket, sessionId]);
 
-  // Signal listeners
+  // Handle Signal Listeners
   useEffect(() => {
     if (!socket || !sessionId) return;
 
-    const handleStreamReady = () => {
-      console.log('[webrtc] stream:ready event received from server');
-      if (!peerRef.current || peerRef.current.signalingState === 'closed') {
-        createAndSendOffer();
-      } else {
-        console.log('[webrtc] PeerConnection already exists with signalingState:', peerRef.current.signalingState);
-      }
-    };
-
-    const handleAnswer = async ({ sdp }) => {
-      console.log('[webrtc] signal:answer received');
-      const pc = peerRef.current;
-      if (!pc) {
-        console.warn('[webrtc] PeerConnection is null when answer received');
-        setErrorReason('No Answer received');
-        return;
-      }
-
-      if (pc.signalingState !== 'have-local-offer') {
-        console.warn(`[webrtc] Ignoring answer because signalingState is '${pc.signalingState}' (expected 'have-local-offer')`);
-        return;
-      }
-
-      try {
-        console.log('[webrtc] Setting remote description...');
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        hasRemoteDescription.current = true;
-        console.log('[webrtc] Remote description set successfully');
-
-        // Flush pending ICE Candidates
-        console.log(`[webrtc] Flushing ${pendingIceCandidates.current.length} pending ICE candidates...`);
-        for (const candidate of pendingIceCandidates.current) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log('[webrtc] Added buffered ICE candidate');
-          } catch (iceErr) {
-            console.error('[webrtc] Failed to add buffered ICE candidate:', iceErr);
-          }
-        }
-        pendingIceCandidates.current = [];
-      } catch (err) {
-        console.error('[webrtc] Failed to set remote description:', err);
-        setStreamState('error');
-        setErrorReason(`RemoteDescription missing: ${err.message}`);
-      }
-    };
-
+    // 1. Dengar Offer dari Python VPS -> Buat Answer -> Kirim ke VPS
     const handleServerOffer = async ({ sdp }) => {
-      console.log('[webrtc] signal:offer received from server');
+      console.log('[webrtc] signal:offer received from VPS server');
       try {
         if (peerRef.current) {
           peerRef.current.close();
@@ -201,7 +54,7 @@ export function useWebRTC(socket, sessionId) {
             setStreamState('connected');
           } else if (pc.connectionState === 'failed') {
             setStreamState('error');
-            setErrorReason('DTLS failed');
+            setErrorReason('DTLS / WebRTC Connection failed');
           }
         };
 
@@ -209,7 +62,7 @@ export function useWebRTC(socket, sessionId) {
           console.log(`[webrtc] iceConnectionState: ${pc.iceConnectionState}`);
           if (pc.iceConnectionState === 'failed') {
             setStreamState('error');
-            setErrorReason('ICE timeout');
+            setErrorReason('ICE timeout / Connection failed');
           }
         };
 
@@ -230,14 +83,28 @@ export function useWebRTC(socket, sessionId) {
           }
         };
 
+        // Set Remote Description (Offer dari Python)
         console.log('[webrtc] Setting remote description (server offer)...');
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));
         hasRemoteDescription.current = true;
 
-        console.log('[webrtc] Creating answer...');
+        // Flush ICE Candidates yang masuk duluan
+        console.log(`[webrtc] Flushing ${pendingIceCandidates.current.length} buffered ICE candidates...`);
+        for (const candidate of pendingIceCandidates.current) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (iceErr) {
+            console.error('[webrtc] Failed to add buffered ICE candidate:', iceErr);
+          }
+        }
+        pendingIceCandidates.current = [];
+
+        // Buat Answer
+        console.log('[webrtc] Creating SDP answer...');
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
+        // Emit Answer ke Node.js
         console.log('[webrtc] Emitting signal:answer to server');
         socket.emit('signal:answer', {
           sessionId,
@@ -246,50 +113,39 @@ export function useWebRTC(socket, sessionId) {
             sdp: pc.localDescription.sdp,
           },
         });
-
-        for (const candidate of pendingIceCandidates.current) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-        pendingIceCandidates.current = [];
       } catch (err) {
         console.error('[webrtc] Failed to handle server offer:', err);
         setStreamState('error');
-        setErrorReason(`Server offer failed: ${err.message}`);
+        setErrorReason(`Server offer processing failed: ${err.message}`);
       }
     };
 
+    // 2. Dengar ICE Candidates dari Server
     const handleIceCandidate = async ({ candidate }) => {
-      console.log('[webrtc] signal:ice-candidate received');
       const pc = peerRef.current;
-      if (!pc) return;
+      if (!candidate) return;
 
-      if (hasRemoteDescription.current) {
+      if (pc && hasRemoteDescription.current) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          console.log('[webrtc] Added ICE candidate immediately');
         } catch (err) {
           console.error('[webrtc] Failed to add ICE candidate:', err);
         }
       } else {
-        console.log('[webrtc] Remote description not set. Buffering candidate...');
         pendingIceCandidates.current.push(candidate);
       }
     };
 
-    socket.on('stream:ready', handleStreamReady);
     socket.on('signal:offer', handleServerOffer);
-    socket.on('signal:answer', handleAnswer);
     socket.on('signal:ice-candidate', handleIceCandidate);
 
     return () => {
-      socket.off('stream:ready', handleStreamReady);
       socket.off('signal:offer', handleServerOffer);
-      socket.off('signal:answer', handleAnswer);
       socket.off('signal:ice-candidate', handleIceCandidate);
     };
-  }, [socket, sessionId, createAndSendOffer]);
+  }, [socket, sessionId]);
 
-  // Stop stream and clean up
+  // Stop stream & clean up
   const stopStream = useCallback(() => {
     if (peerRef.current) {
       console.log('[webrtc] Closing PeerConnection');
@@ -311,7 +167,7 @@ export function useWebRTC(socket, sessionId) {
     setErrorReason(null);
   }, [socket, sessionId]);
 
-  // Get WebRTC stats periodically
+  // Ambil statistik bitrate/fps
   useEffect(() => {
     if (streamState !== 'connected' || !peerRef.current) return;
 
@@ -333,14 +189,13 @@ export function useWebRTC(socket, sessionId) {
 
         setStats(videoStats);
       } catch {
-        // Stats unavailable
+        // Ignored
       }
     }, 2000);
 
     return () => clearInterval(interval);
   }, [streamState]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => stopStream();
   }, [stopStream]);

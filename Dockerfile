@@ -50,6 +50,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfontconfig1 \
     # Virtual gamepad
     libevdev-dev \
+    # Python + GStreamer bindings (for WebRTC streamer)
+    python3 \
+    python3-gi \
+    gir1.2-gstreamer-1.0 \
+    gir1.2-gst-plugins-base-1.0 \
+    gir1.2-gst-plugins-bad-1.0 \
     # Misc
     jq \
     unzip \

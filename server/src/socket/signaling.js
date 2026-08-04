@@ -3,6 +3,7 @@
 // Handles SDP offer/answer and ICE candidate exchange
 // ============================================================
 
+import { handleOffer, handleIceCandidate } from '../services/streaming.service.js';
 import logger from '../utils/logger.js';
 
 // Track which socket is viewing which session
@@ -61,12 +62,7 @@ export function setupSignaling(io, socket) {
    */
   socket.on('signal:offer', ({ sessionId, sdp }) => {
     logger.debug(`[signaling] Offer from ${socket.id} for session ${sessionId}`);
-
-    // Forward to the streaming server / other peers
-    socket.to(`session:${sessionId}`).emit('signal:offer', {
-      from: socket.id,
-      sdp,
-    });
+    handleOffer(sessionId, sdp, socket.id, io);
   });
 
   /**
@@ -87,15 +83,8 @@ export function setupSignaling(io, socket) {
    * ICE Candidate exchange
    * Event: signal:ice-candidate { sessionId, candidate, to }
    */
-  socket.on('signal:ice-candidate', ({ sessionId, candidate, to }) => {
-    if (to) {
-      io.to(to).emit('signal:ice-candidate', { candidate, from: socket.id });
-    } else {
-      socket.to(`session:${sessionId}`).emit('signal:ice-candidate', {
-        candidate,
-        from: socket.id,
-      });
-    }
+  socket.on('signal:ice-candidate', ({ sessionId, candidate }) => {
+    handleIceCandidate(sessionId, candidate);
   });
 
   // Cleanup on disconnect

@@ -67,6 +67,8 @@ def on_ice_candidate(element, mline_index, candidate):
 webrtc.connect("on-ice-candidate", on_ice_candidate)
 
 def on_answer_created(promise, user_data):
+    sys.stderr.write("Creating SDP answer...\n")
+    sys.stderr.flush()
     promise.wait()
     reply = promise.get_reply()
     answer = reply.get_value("answer")
@@ -76,6 +78,8 @@ def on_answer_created(promise, user_data):
     promise_local.wait()
 
     sdp_text = answer.as_text()
+    sys.stderr.write("✓ SDP answer created successfully\n")
+    sys.stderr.flush()
     send_json({
         "type": "answer",
         "sdp": {
@@ -85,27 +89,39 @@ def on_answer_created(promise, user_data):
     })
 
 def handle_offer(sdp_info):
-    sdp_text = sdp_info.get("sdp", "")
-    res, sdp_msg = GstSdp.SDPMessage.new()
-    GstSdp.sdp_message_parse_buffer(bytes(sdp_text, 'utf-8'), sdp_msg)
-    
-    offer = GstWebRTC.WebRTCSessionDescription.new(
-        GstWebRTC.WebRTCSDPType.OFFER, sdp_msg
-    )
+    try:
+        sys.stderr.write("Handling WebRTC offer in GLib main loop...\n")
+        sys.stderr.flush()
+        sdp_text = sdp_info.get("sdp", "")
+        res, sdp_msg = GstSdp.SDPMessage.new()
+        GstSdp.sdp_message_parse_buffer(bytes(sdp_text, 'utf-8'), sdp_msg)
+        
+        offer = GstWebRTC.WebRTCSessionDescription.new(
+            GstWebRTC.WebRTCSDPType.OFFER, sdp_msg
+        )
 
-    promise_remote = Gst.Promise.new()
-    webrtc.emit("set-remote-description", offer, promise_remote)
-    promise_remote.wait()
+        promise_remote = Gst.Promise.new()
+        webrtc.emit("set-remote-description", offer, promise_remote)
+        promise_remote.wait()
 
-    promise_answer = Gst.Promise.new_with_change_func(on_answer_created, None)
-    webrtc.emit("create-answer", None, promise_answer)
+        promise_answer = Gst.Promise.new_with_change_func(on_answer_created, None)
+        webrtc.emit("create-answer", None, promise_answer)
+    except Exception as e:
+        sys.stderr.write(f"Err handling offer: {e}\n")
+        sys.stderr.flush()
+    return False
 
 def handle_ice(candidate_info):
-    cand = candidate_info.get("candidate", {})
-    c_str = cand.get("candidate", "")
-    mline = cand.get("sdpMLineIndex", 0)
-    if c_str:
-        webrtc.emit("add-ice-candidate", mline, c_str)
+    try:
+        cand = candidate_info.get("candidate", {})
+        c_str = cand.get("candidate", "")
+        mline = cand.get("sdpMLineIndex", 0)
+        if c_str:
+            webrtc.emit("add-ice-candidate", mline, c_str)
+    except Exception as e:
+        sys.stderr.write(f"Err handling ICE: {e}\n")
+        sys.stderr.flush()
+    return False
 
 def read_stdin():
     for line in sys.stdin:
@@ -116,9 +132,11 @@ def read_stdin():
             msg = json.loads(line)
             mtype = msg.get("type")
             if mtype == "offer":
-                handle_offer(msg.get("sdp", {}))
+                sys.stderr.write("Received offer on stdin, scheduling on GLib main loop...\n")
+                sys.stderr.flush()
+                GLib.idle_add(handle_offer, msg.get("sdp", {}))
             elif mtype == "ice":
-                handle_ice(msg)
+                GLib.idle_add(handle_ice, msg)
         except Exception as e:
             sys.stderr.write(f"Err processing stdin: {e}\n")
             sys.stderr.flush()

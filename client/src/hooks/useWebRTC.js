@@ -92,16 +92,21 @@ export function useWebRTC(socket, sessionId) {
       });
     };
 
-    // Send offer immediately (server will queue if pipeline not ready yet)
+    // Send offer immediately
     sendOffer();
 
-    // Also listen for stream:ready in case server notifies us
-    socket.on('stream:ready', () => {
-      if (!peerRef.current || peerRef.current.signalingState === 'closed') {
-        console.log('[webrtc] Stream ready event received, sending offer');
-        sendOffer();
+    // Listen for stream:ready from server to ensure offer is sent when pipeline is active
+    const handleStreamReady = () => {
+      console.log('[webrtc] Stream ready event received from server');
+      if (peerRef.current && peerRef.current.signalingState !== 'closed') {
+        peerRef.current.close();
+        peerRef.current = null;
       }
-    });
+      sendOffer();
+    };
+
+    socket.off('stream:ready', handleStreamReady);
+    socket.on('stream:ready', handleStreamReady);
   }, [socket, sessionId]);
 
   // Stop stream and clean up

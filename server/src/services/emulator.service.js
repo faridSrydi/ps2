@@ -37,6 +37,15 @@ export async function launchEmulator(sessionId, gamePath) {
   try {
     // 1. Start Xvfb (virtual display)
     const [width, height] = config.streaming.resolution.split('x');
+
+    // Remove stale lock files from previous runs (docker restart preserves /tmp)
+    try {
+      const { unlinkSync } = await import('fs');
+      const lockFile = `/tmp/.X${displayNumber}-lock`;
+      try { unlinkSync(lockFile); } catch { /* doesn't exist */ }
+      try { unlinkSync(`/tmp/.X11-unix/X${displayNumber}`); } catch { /* doesn't exist */ }
+    } catch { /* ignore */ }
+
     const xvfb = spawn('Xvfb', [
       display,
       '-screen', '0', `${width}x${height}x24`,
@@ -44,13 +53,29 @@ export async function launchEmulator(sessionId, gamePath) {
       '+extension', 'GLX',
       '+extension', 'RANDR',
     ], {
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'pipe'],  // capture stderr
       detached: true,
     });
+
+    xvfb.stderr.on('data', (data) => {
+      logger.warn(`[xvfb:${sessionId}] ${data.toString().trim()}`);
+    });
+
+    xvfb.on('exit', (code) => {
+      logger.warn(`[xvfb:${sessionId}] Exited with code ${code}`);
+    });
+
     xvfb.unref();
 
-    // Wait for Xvfb to initialize
-    await sleep(1000);
+    // Wait for Xvfb to initialize and verify it's accessible
+    await sleep(1500);
+    try {
+      const { execSync } = await import('child_process');
+      execSync(`xdpyinfo -display ${display}`, { stdio: 'ignore', timeout: 3000 });
+      logger.info(`[emulator] ✓ Xvfb display ${display} is ready`);
+    } catch {
+      logger.error(`[emulator] ✗ Xvfb display ${display} is NOT accessible — streaming will fail`);
+    }
 
     // 2. Launch PCSX2
     const pcsx2Args = [

@@ -17,72 +17,92 @@ export function useWebRTC(socket, sessionId) {
 
     setStreamState('connecting');
 
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-      ],
-      iceCandidatePoolSize: 10,
-    });
+    // Join session room first
+    socket.emit('session:join', { sessionId });
 
-    peerRef.current = pc;
-
-    // Handle incoming tracks (video + audio from server)
-    pc.ontrack = (event) => {
-      if (videoRef.current && event.streams[0]) {
-        videoRef.current.srcObject = event.streams[0];
-        setStreamState('connected');
-      }
-    };
-
-    // Send ICE candidates to signaling server
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit('signal:ice-candidate', {
-          sessionId,
-          candidate: event.candidate,
-        });
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-        setStreamState('error');
-      }
-    };
-
-    // Add transceivers for receiving audio and video
-    pc.addTransceiver('video', { direction: 'recvonly' });
-    pc.addTransceiver('audio', { direction: 'recvonly' });
-
-    // Create and send offer
-    pc.createOffer()
-      .then((offer) => pc.setLocalDescription(offer))
-      .then(() => {
-        socket.emit('signal:offer', {
-          sessionId,
-          sdp: pc.localDescription,
-        });
-      })
-      .catch((err) => {
-        console.error('[webrtc] Offer creation failed:', err);
-        setStreamState('error');
+    // Function to create and send offer
+    const sendOffer = () => {
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+        iceCandidatePoolSize: 10,
       });
 
-    // Listen for answer from server
-    socket.on('signal:answer', ({ sdp }) => {
-      pc.setRemoteDescription(new RTCSessionDescription(sdp))
-        .catch(console.error);
+      peerRef.current = pc;
+
+      // Handle incoming tracks (video + audio from server)
+      pc.ontrack = (event) => {
+        if (videoRef.current && event.streams[0]) {
+          videoRef.current.srcObject = event.streams[0];
+          setStreamState('connected');
+        }
+      };
+
+      // Send ICE candidates to signaling server
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('signal:ice-candidate', {
+            sessionId,
+            candidate: event.candidate,
+          });
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+          setStreamState('error');
+        }
+      };
+
+      // Add transceivers for receiving audio and video
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+
+      // Create and send offer
+      pc.createOffer()
+        .then((offer) => pc.setLocalDescription(offer))
+        .then(() => {
+          console.log('[webrtc] Sending offer to server');
+          socket.emit('signal:offer', {
+            sessionId,
+            sdp: pc.localDescription,
+          });
+        })
+        .catch((err) => {
+          console.error('[webrtc] Offer creation failed:', err);
+          setStreamState('error');
+        });
+
+      // Listen for answer from server
+      socket.on('signal:answer', ({ sdp }) => {
+        console.log('[webrtc] Received answer from server');
+        pc.setRemoteDescription(new RTCSessionDescription(sdp))
+          .catch(console.error);
+      });
+
+      // Listen for ICE candidates from server
+      socket.on('signal:ice-candidate', ({ candidate }) => {
+        pc.addIceCandidate(new RTCIceCandidate(candidate))
+          .catch(console.error);
+      });
+    };
+
+    // Wait for stream:ready from server before sending offer
+    // (server emits this after GStreamer pipeline is started)
+    socket.on('stream:ready', () => {
+      console.log('[webrtc] Stream ready, sending offer');
+      sendOffer();
     });
 
-    // Listen for ICE candidates from server
-    socket.on('signal:ice-candidate', ({ candidate }) => {
-      pc.addIceCandidate(new RTCIceCandidate(candidate))
-        .catch(console.error);
-    });
-
-    // Join session room
-    socket.emit('session:join', { sessionId });
+    // Fallback: if stream is already ready (reconnection scenario), send offer after 5s
+    setTimeout(() => {
+      if (!peerRef.current) {
+        console.log('[webrtc] Fallback: sending offer after timeout');
+        sendOffer();
+      }
+    }, 8000);
   }, [socket, sessionId]);
 
   // Stop stream and clean up

@@ -67,26 +67,34 @@ def on_ice_candidate(element, mline_index, candidate):
 webrtc.connect("on-ice-candidate", on_ice_candidate)
 
 def on_answer_created(promise, user_data):
-    sys.stderr.write("Creating SDP answer...\n")
-    sys.stderr.flush()
-    promise.wait()
-    reply = promise.get_reply()
-    answer = reply.get_value("answer")
+    try:
+        sys.stderr.write("Creating SDP answer...\n")
+        sys.stderr.flush()
+        reply = promise.get_reply()
+        if not reply or not reply.has_field("answer"):
+            sys.stderr.write("Err: No answer field in promise reply\n")
+            sys.stderr.flush()
+            return
 
-    promise_local = Gst.Promise.new()
-    webrtc.emit("set-local-description", answer, promise_local)
-    promise_local.wait()
+        answer = reply.get_value("answer")
 
-    sdp_text = answer.as_text()
-    sys.stderr.write("✓ SDP answer created successfully\n")
-    sys.stderr.flush()
-    send_json({
-        "type": "answer",
-        "sdp": {
+        promise_local = Gst.Promise.new()
+        webrtc.emit("set-local-description", answer, promise_local)
+        promise_local.wait()
+
+        sdp_text = answer.as_text()
+        sys.stderr.write("✓ SDP answer created successfully\n")
+        sys.stderr.flush()
+        send_json({
             "type": "answer",
-            "sdp": sdp_text,
-        }
-    })
+            "sdp": {
+                "type": "answer",
+                "sdp": sdp_text,
+            }
+        })
+    except Exception as e:
+        sys.stderr.write(f"Err in on_answer_created: {e}\n")
+        sys.stderr.flush()
 
 def handle_offer(sdp_info):
     try:

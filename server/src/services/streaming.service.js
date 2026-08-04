@@ -3,7 +3,7 @@
 // GStreamer pipeline for screen capture → NVENC → WebRTC
 // ============================================================
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import config from '../config/env.js';
 import logger from '../utils/logger.js';
 
@@ -32,6 +32,9 @@ export async function startStream(sessionId, displayNumber) {
   logger.info(`[streaming] Starting WebRTC Python streamer for session ${sessionId} | Display ${display}`);
 
   try {
+    // Wait for Xvfb display to be ready (PCSX2 needs time to start rendering)
+    await waitForDisplay(display, 10000);
+
     const pythonScript = '/app/scripts/webrtc_stream.py';
     const gstProcess = spawn('python3', [
       pythonScript,
@@ -45,7 +48,6 @@ export async function startStream(sessionId, displayNumber) {
         ...process.env,
         DISPLAY: display,
         XDG_RUNTIME_DIR: '/tmp/runtime-root',
-        GST_DEBUG: '2',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -173,6 +175,25 @@ function allocatePort() {
     nextPort = config.streaming.portMin;
   }
   return port;
+}
+
+/**
+ * Wait until an X display is ready by polling xdpyinfo.
+ * @param {string} display - e.g. ":10"
+ * @param {number} timeoutMs - max wait time
+ */
+async function waitForDisplay(display, timeoutMs = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      execSync(`xdpyinfo -display ${display}`, { stdio: 'ignore', timeout: 2000 });
+      logger.info(`[streaming] Display ${display} is ready`);
+      return;
+    } catch {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+  logger.warn(`[streaming] Display ${display} not ready after ${timeoutMs}ms, proceeding anyway`);
 }
 
 export default { startStream, stopStream, getActivePipelines, handleOffer, handleIceCandidate };

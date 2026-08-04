@@ -49,7 +49,7 @@ export async function startStream(sessionId, displayNumber) {
     });
 
     gstProcess.stderr.on('data', (data) => {
-      logger.debug(`[gst:${sessionId}] ${data.toString().trim()}`);
+      logger.info(`[gst:${sessionId}] ${data.toString().trim()}`);
     });
 
     gstProcess.on('exit', (code) => {

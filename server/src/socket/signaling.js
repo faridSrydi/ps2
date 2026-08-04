@@ -61,7 +61,7 @@ export function setupSignaling(io, socket) {
    * Event: signal:offer { sessionId, sdp }
    */
   socket.on('signal:offer', ({ sessionId, sdp }) => {
-    logger.debug(`[signaling] Offer from ${socket.id} for session ${sessionId}`);
+    logger.info(`[signaling] Offer received from ${socket.id} for session ${sessionId}`);
     handleOffer(sessionId, sdp, socket.id, io);
   });
 
@@ -70,7 +70,7 @@ export function setupSignaling(io, socket) {
    * Event: signal:answer { sessionId, sdp, to }
    */
   socket.on('signal:answer', ({ sessionId, sdp, to }) => {
-    logger.debug(`[signaling] Answer for session ${sessionId}`);
+    logger.info(`[signaling] Answer for session ${sessionId}`);
 
     if (to) {
       io.to(to).emit('signal:answer', { sdp });

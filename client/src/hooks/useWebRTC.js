@@ -67,7 +67,10 @@ export function useWebRTC(socket, sessionId) {
           console.log('[webrtc] Sending offer to server');
           socket.emit('signal:offer', {
             sessionId,
-            sdp: pc.localDescription,
+            sdp: {
+              type: pc.localDescription.type,
+              sdp: pc.localDescription.sdp,
+            },
           });
         })
         .catch((err) => {
@@ -89,20 +92,16 @@ export function useWebRTC(socket, sessionId) {
       });
     };
 
-    // Wait for stream:ready from server before sending offer
-    // (server emits this after GStreamer pipeline is started)
-    socket.on('stream:ready', () => {
-      console.log('[webrtc] Stream ready, sending offer');
-      sendOffer();
-    });
+    // Send offer immediately (server will queue if pipeline not ready yet)
+    sendOffer();
 
-    // Fallback: if stream is already ready (reconnection scenario), send offer after 5s
-    setTimeout(() => {
-      if (!peerRef.current) {
-        console.log('[webrtc] Fallback: sending offer after timeout');
+    // Also listen for stream:ready in case server notifies us
+    socket.on('stream:ready', () => {
+      if (!peerRef.current || peerRef.current.signalingState === 'closed') {
+        console.log('[webrtc] Stream ready event received, sending offer');
         sendOffer();
       }
-    }, 8000);
+    });
   }, [socket, sessionId]);
 
   // Stop stream and clean up

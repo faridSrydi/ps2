@@ -59,7 +59,7 @@ export async function startStream(sessionId, displayNumber, io) {
       io,
     });
 
-    // 1. TANGKAP STDOUT DARI PYTHON STREAMER (FIXED: gstProcess.stdout)
+    // Tangkap STDOUT dari Python Streamer
     gstProcess.stdout.on('data', (data) => {
       const lines = data.toString().split('\n');
       for (const line of lines) {
@@ -67,18 +67,18 @@ export async function startStream(sessionId, displayNumber, io) {
         try {
           const msg = JSON.parse(line.trim());
           
-          // Python ngirim OFFER -> Forward ke Browser Client
+          // Python mengirim OFFER -> Emit ke Browser Client
           if (msg.type === 'offer') {
             logger.info(`[streaming] SDP Offer received from Python for session ${sessionId}`);
             io.to(`session:${sessionId}`).emit('signal:offer', { sdp: msg.sdp });
           } 
-          // Python ngirim ICE Candidate -> Forward ke Browser Client
+          // Python mengirim ICE Candidate -> Emit ke Browser Client
           else if (msg.type === 'ice') {
             logger.info(`[streaming] ICE candidate received from Python for session ${sessionId}`);
             io.to(`session:${sessionId}`).emit('signal:ice-candidate', { candidate: msg.candidate });
           }
         } catch {
-          // Abaikan log biasa dari GStreamer
+          // Abaikan log biasa dari process stdout
         }
       }
     });
@@ -103,19 +103,6 @@ export async function startStream(sessionId, displayNumber, io) {
     logger.error(`[streaming] Failed to start pipeline for ${sessionId}:`, error);
     throw error;
   }
-}
-
-/**
- * Handle WebRTC Offer from browser client -> Send to Python STDIN
- */
-export function handleOffer(sessionId, sdp) {
-  logger.info(`[streaming] Offer received from Browser for session ${sessionId}`);
-  const pipeline = activePipelines.get(sessionId);
-  if (!pipeline) return;
-
-  const payload = JSON.stringify({ type: 'offer', sdp }) + '\n';
-  pipeline.process.stdin.write(payload);
-  logger.info(`[streaming] Offer forwarded to Python STDIN for session ${sessionId}`);
 }
 
 /**

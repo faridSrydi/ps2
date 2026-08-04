@@ -127,7 +127,11 @@ export function useWebRTC(socket, sessionId) {
 
     const handleStreamReady = () => {
       console.log('[webrtc] stream:ready event received from server');
-      createAndSendOffer();
+      if (!peerRef.current || peerRef.current.signalingState === 'closed') {
+        createAndSendOffer();
+      } else {
+        console.log('[webrtc] PeerConnection already exists with signalingState:', peerRef.current.signalingState);
+      }
     };
 
     const handleAnswer = async ({ sdp }) => {
@@ -138,6 +142,12 @@ export function useWebRTC(socket, sessionId) {
         setErrorReason('No Answer received');
         return;
       }
+
+      if (pc.signalingState !== 'have-local-offer') {
+        console.warn(`[webrtc] Ignoring answer because signalingState is '${pc.signalingState}' (expected 'have-local-offer')`);
+        return;
+      }
+
       try {
         console.log('[webrtc] Setting remote description...');
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));

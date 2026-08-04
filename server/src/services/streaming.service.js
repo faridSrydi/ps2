@@ -9,6 +9,7 @@ import logger from '../utils/logger.js';
 
 // Track active streaming pipelines: sessionId → { process, port }
 const activePipelines = new Map();
+const pendingOffers = new Map();
 
 // Port allocator for WebRTC
 let nextPort = config.streaming.portMin;
@@ -59,6 +60,7 @@ export async function startStream(sessionId, displayNumber) {
     gstProcess.on('exit', (code) => {
       logger.info(`[streaming] Pipeline ${sessionId} exited with code ${code}`);
       activePipelines.delete(sessionId);
+      pendingOffers.delete(sessionId);
     });
 
     gstProcess.on('error', (err) => {
@@ -75,6 +77,14 @@ export async function startStream(sessionId, displayNumber) {
 
     logger.info(`[streaming] ✓ WebRTC streamer started for session ${sessionId}`);
 
+    // If offer arrived before pipeline was ready, process it now
+    if (pendingOffers.has(sessionId)) {
+      logger.info(`[streaming] Processing queued offer for session ${sessionId}`);
+      const pending = pendingOffers.get(sessionId);
+      pendingOffers.delete(sessionId);
+      handleOffer(sessionId, pending.sdp, pending.socketId, pending.io);
+    }
+
     return { port };
   } catch (error) {
     logger.error(`[streaming] Failed to start pipeline for ${sessionId}:`, error);
@@ -86,8 +96,13 @@ export async function startStream(sessionId, displayNumber) {
  * Handle WebRTC Offer from client
  */
 export function handleOffer(sessionId, sdp, socketId, io) {
+  logger.info(`[streaming] Offer received for session ${sessionId} from browser ${socketId}`);
   const pipeline = activePipelines.get(sessionId);
-  if (!pipeline) return;
+  if (!pipeline) {
+    logger.info(`[streaming] Offer received before pipeline ready for ${sessionId}, queuing...`);
+    pendingOffers.set(sessionId, { sdp, socketId, io });
+    return;
+  }
 
   pipeline.io = io;
   pipeline.socketId = socketId;
@@ -102,9 +117,12 @@ export function handleOffer(sessionId, sdp, socketId, io) {
         try {
           const msg = JSON.parse(line.trim());
           if (msg.type === 'answer' && pipeline.socketId) {
-            logger.info(`[streaming] Emitting signal:answer for session ${sessionId} to ${pipeline.socketId}`);
+            logger.info(`[streaming] Answer received from Python for session ${sessionId}`);
+            logger.info(`[streaming] Answer sent to Browser for session ${sessionId}`);
             io.to(pipeline.socketId).emit('signal:answer', { sdp: msg.sdp });
           } else if (msg.type === 'ice' && pipeline.socketId) {
+            logger.info(`[streaming] ICE received from Python for session ${sessionId}`);
+            logger.info(`[streaming] ICE forwarded to Browser for session ${sessionId}`);
             io.to(pipeline.socketId).emit('signal:ice-candidate', { candidate: msg.candidate });
           }
         } catch {
@@ -115,6 +133,7 @@ export function handleOffer(sessionId, sdp, socketId, io) {
   }
 
   // Send offer to python streamer via stdin
+  logger.info(`[streaming] Offer forwarded to Python for session ${sessionId}`);
   pipeline.process.stdin.write(JSON.stringify({ type: 'offer', sdp }) + '\n');
 }
 
@@ -122,8 +141,10 @@ export function handleOffer(sessionId, sdp, socketId, io) {
  * Handle ICE candidate from client
  */
 export function handleIceCandidate(sessionId, candidate) {
+  logger.info(`[streaming] ICE received from Browser for session ${sessionId}`);
   const pipeline = activePipelines.get(sessionId);
   if (!pipeline) return;
+  logger.info(`[streaming] ICE forwarded to Python for session ${sessionId}`);
   pipeline.process.stdin.write(JSON.stringify({ type: 'ice', candidate }) + '\n');
 }
 

@@ -39,8 +39,12 @@ if has_nvenc:
 else:
     video_enc = f"x264enc tune=zerolatency bitrate={bitrate} speed-preset=ultrafast key-int-max=30"
 
-# Audio pipeline: pulse audio if available, else audiotestsrc silence fallback
-audio_src = "pulsesrc"
+audio_src = "audiotestsrc is-live=true wave=silence"
+try:
+    if Gst.ElementFactory.find("pulsesrc"):
+        audio_src = "pulsesrc"
+except Exception:
+    pass
 
 pipeline_str = (
     f"ximagesrc display-name={display} use-damage=false show-pointer=false "

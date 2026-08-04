@@ -24,77 +24,32 @@ let nextPort = config.streaming.portMin;
 export async function startStream(sessionId, displayNumber) {
   const port = allocatePort();
   const display = `:${displayNumber}`;
-  const [width, height] = config.streaming.resolution.split('x');
+  const resolution = config.streaming.resolution;
+  const fps = config.streaming.fps;
+  const bitrate = config.streaming.bitrate;
+  const stunServer = config.streaming.stunServer;
 
-  logger.info(`[streaming] Starting pipeline for session ${sessionId} | Display ${display} | Port ${port}`);
-
-  // Check if NVENC (NVIDIA hardware encoder) is available, fallback to x264enc (software)
-  let videoEncoder = `! x264enc tune=zerolatency bitrate=${config.streaming.bitrate} speed-preset=ultrafast key-int-max=30`;
-  try {
-    const { execSync } = await import('child_process');
-    execSync('gst-inspect-1.0 nvh264enc', { stdio: 'ignore' });
-    videoEncoder = [
-      `! nvh264enc`,
-      `  bitrate=${config.streaming.bitrate}`,
-      `  preset=low-latency-hq`,
-      `  rc-mode=cbr`,
-      `  zerolatency=true`,
-      `  gop-size=30`,
-    ].join(' ');
-    logger.info('[streaming] Using NVIDIA NVENC hardware encoder');
-  } catch {
-    logger.info('[streaming] NVIDIA NVENC not found, using x264enc software encoder');
-  }
-
-  // GStreamer pipeline command
-  // Captures X11 display → scales → encodes → outputs via WebRTC
-  const pipelineDesc = [
-    // Video capture from Xvfb
-    `ximagesrc display-name=${display} use-damage=false show-pointer=false`,
-    `! video/x-raw,framerate=${config.streaming.fps}/1`,
-    `! videoconvert`,
-    `! videoscale`,
-    `! video/x-raw,width=${width},height=${height}`,
-
-    // Video encoder (NVENC or x264enc)
-    videoEncoder,
-
-    // RTP payload
-    `! rtph264pay config-interval=-1 pt=96`,
-
-    // Audio capture (PulseAudio with fallback to silence)
-    `pulsesrc`,
-    `! audioconvert`,
-    `! audioresample`,
-    `! opusenc bitrate=128000 frame-size=10`,
-    `! rtpopuspay pt=97`,
-
-    // WebRTC output
-    `webrtcbin name=webrtc bundle-policy=max-bundle`,
-    `  stun-server=${config.streaming.stunServer}`,
-  ].join(' ');
+  logger.info(`[streaming] Starting WebRTC Python streamer for session ${sessionId} | Display ${display}`);
 
   try {
-    const gstProcess = spawn('gst-launch-1.0', ['-v', '-e', pipelineDesc], {
+    const pythonScript = '/app/scripts/webrtc_stream.py';
+    const gstProcess = spawn('python3', [
+      pythonScript,
+      display,
+      resolution,
+      String(fps),
+      String(bitrate),
+      stunServer
+    ], {
       env: {
         ...process.env,
         DISPLAY: display,
-        GST_DEBUG: '2',  // Minimal debug output
       },
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true,
-    });
-
-    gstProcess.stdout.on('data', (data) => {
-      logger.debug(`[gst:${sessionId}] ${data.toString().trim()}`);
     });
 
     gstProcess.stderr.on('data', (data) => {
-      const msg = data.toString().trim();
-      // Filter out noisy GStreamer debug messages
-      if (!msg.includes('DEBUG') && !msg.includes('LOG')) {
-        logger.debug(`[gst:${sessionId}] ${msg}`);
-      }
+      logger.debug(`[gst:${sessionId}] ${data.toString().trim()}`);
     });
 
     gstProcess.on('exit', (code) => {
@@ -110,9 +65,11 @@ export async function startStream(sessionId, displayNumber) {
       process: gstProcess,
       port,
       displayNumber,
+      io: null,
+      socketId: null,
     });
 
-    logger.info(`[streaming] ✓ Pipeline started for session ${sessionId}`);
+    logger.info(`[streaming] ✓ WebRTC streamer started for session ${sessionId}`);
 
     return { port };
   } catch (error) {
@@ -122,9 +79,52 @@ export async function startStream(sessionId, displayNumber) {
 }
 
 /**
+ * Handle WebRTC Offer from client
+ */
+export function handleOffer(sessionId, sdp, socketId, io) {
+  const pipeline = activePipelines.get(sessionId);
+  if (!pipeline) return;
+
+  pipeline.io = io;
+  pipeline.socketId = socketId;
+
+  // Set up stdout listener once offer arrives
+  if (!pipeline.listening) {
+    pipeline.listening = true;
+    pipeline.process.stdout.on('data', (data) => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line.trim());
+          if (msg.type === 'answer' && pipeline.socketId) {
+            logger.info(`[streaming] Emitting signal:answer for session ${sessionId} to ${pipeline.socketId}`);
+            io.to(pipeline.socketId).emit('signal:answer', { sdp: msg.sdp });
+          } else if (msg.type === 'ice' && pipeline.socketId) {
+            io.to(pipeline.socketId).emit('signal:ice-candidate', { candidate: msg.candidate });
+          }
+        } catch {
+          // ignore non-json logs
+        }
+      }
+    });
+  }
+
+  // Send offer to python streamer via stdin
+  pipeline.process.stdin.write(JSON.stringify({ type: 'offer', sdp }) + '\n');
+}
+
+/**
+ * Handle ICE candidate from client
+ */
+export function handleIceCandidate(sessionId, candidate) {
+  const pipeline = activePipelines.get(sessionId);
+  if (!pipeline) return;
+  pipeline.process.stdin.write(JSON.stringify({ type: 'ice', candidate }) + '\n');
+}
+
+/**
  * Stop the streaming pipeline for a session.
- *
- * @param {string} sessionId - Session UUID
  */
 export async function stopStream(sessionId) {
   const pipeline = activePipelines.get(sessionId);
@@ -133,10 +133,7 @@ export async function stopStream(sessionId) {
     logger.info(`[streaming] Stopping pipeline for session ${sessionId}`);
 
     try {
-      // Send EOS (End of Stream) signal for graceful shutdown
       pipeline.process.kill('SIGINT');
-
-      // Force kill after 3 seconds
       setTimeout(() => {
         try {
           pipeline.process.kill('SIGKILL');
@@ -167,19 +164,13 @@ export function getActivePipelines() {
   return result;
 }
 
-/**
- * Allocate a port from the WebRTC port range
- */
 function allocatePort() {
   const port = nextPort;
   nextPort++;
-
-  // Wrap around if we exceed max
   if (nextPort > config.streaming.portMax) {
     nextPort = config.streaming.portMin;
   }
-
   return port;
 }
 
-export default { startStream, stopStream, getActivePipelines };
+export default { startStream, stopStream, getActivePipelines, handleOffer, handleIceCandidate };

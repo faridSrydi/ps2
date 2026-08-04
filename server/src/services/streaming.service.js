@@ -106,6 +106,19 @@ export async function startStream(sessionId, displayNumber, io) {
 }
 
 /**
+ * Handle WebRTC Offer from browser client -> Send to Python STDIN
+ */
+export function handleOffer(sessionId, sdp) {
+  logger.info(`[streaming] Offer received from Browser for session ${sessionId}`);
+  const pipeline = activePipelines.get(sessionId);
+  if (!pipeline) return;
+
+  const payload = JSON.stringify({ type: 'offer', sdp }) + '\n';
+  pipeline.process.stdin.write(payload);
+  logger.info(`[streaming] Offer forwarded to Python STDIN for session ${sessionId}`);
+}
+
+/**
  * Handle WebRTC Answer from browser client -> Send to Python STDIN
  */
 export function handleAnswer(sessionId, sdp) {

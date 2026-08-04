@@ -28,8 +28,26 @@ export async function startStream(sessionId, displayNumber) {
 
   logger.info(`[streaming] Starting pipeline for session ${sessionId} | Display ${display} | Port ${port}`);
 
+  // Check if NVENC (NVIDIA hardware encoder) is available, fallback to x264enc (software)
+  let videoEncoder = `! x264enc tune=zerolatency bitrate=${config.streaming.bitrate} speed-preset=ultrafast key-int-max=30`;
+  try {
+    const { execSync } = await import('child_process');
+    execSync('gst-inspect-1.0 nvh264enc', { stdio: 'ignore' });
+    videoEncoder = [
+      `! nvh264enc`,
+      `  bitrate=${config.streaming.bitrate}`,
+      `  preset=low-latency-hq`,
+      `  rc-mode=cbr`,
+      `  zerolatency=true`,
+      `  gop-size=30`,
+    ].join(' ');
+    logger.info('[streaming] Using NVIDIA NVENC hardware encoder');
+  } catch {
+    logger.info('[streaming] NVIDIA NVENC not found, using x264enc software encoder');
+  }
+
   // GStreamer pipeline command
-  // Captures X11 display → scales → encodes with NVENC → outputs via WebRTC
+  // Captures X11 display → scales → encodes → outputs via WebRTC
   const pipelineDesc = [
     // Video capture from Xvfb
     `ximagesrc display-name=${display} use-damage=false show-pointer=false`,
@@ -38,18 +56,13 @@ export async function startStream(sessionId, displayNumber) {
     `! videoscale`,
     `! video/x-raw,width=${width},height=${height}`,
 
-    // Try NVENC first, fallback to x264 software encoder
-    `! nvh264enc`,
-    `  bitrate=${config.streaming.bitrate}`,
-    `  preset=low-latency-hq`,
-    `  rc-mode=cbr`,
-    `  zerolatency=true`,
-    `  gop-size=30`,
+    // Video encoder (NVENC or x264enc)
+    videoEncoder,
 
     // RTP payload
     `! rtph264pay config-interval=-1 pt=96`,
 
-    // Audio capture (PulseAudio)
+    // Audio capture (PulseAudio with fallback to silence)
     `pulsesrc`,
     `! audioconvert`,
     `! audioresample`,

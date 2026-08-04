@@ -73,7 +73,8 @@ export async function createSession(req, res) {
     const qr = await generateQRCode(roomId, baseUrl);
 
     // Launch emulator and streaming in background
-    launchSession(session.id, game).catch((err) => {
+    const io = req.app.get('io');
+    launchSession(session.id, game, io).catch((err) => {
       logger.error(`[session] Failed to launch session ${session.id}:`, err);
     });
 
@@ -113,7 +114,7 @@ export async function createSession(req, res) {
 /**
  * Internal: Launch the emulator and streaming pipeline
  */
-async function launchSession(sessionId, game) {
+async function launchSession(sessionId, game, io) {
   try {
     // Launch PCSX2 emulator
     const emulatorInfo = await launchEmulator(sessionId, game.filepath);
@@ -133,6 +134,12 @@ async function launchSession(sessionId, game) {
     });
 
     logger.info(`[session] Launched: ${sessionId} | PID: ${emulatorInfo.pid} | Display: :${emulatorInfo.displayNumber}`);
+
+    // Notify clients in the session room that the stream is ready for WebRTC
+    if (io) {
+      io.to(`session:${sessionId}`).emit('stream:ready', { sessionId });
+      logger.info(`[session] Emitted stream:ready for session ${sessionId}`);
+    }
   } catch (error) {
     await prisma.session.update({
       where: { id: sessionId },

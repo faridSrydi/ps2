@@ -78,9 +78,7 @@ def on_answer_created(promise, user_data):
 
         answer = reply.get_value("answer")
 
-        promise_local = Gst.Promise.new()
-        webrtc.emit("set-local-description", answer, promise_local)
-        promise_local.wait()
+        webrtc.emit("set-local-description", answer, None)
 
         sdp_text = answer.as_text()
         sys.stderr.write("✓ SDP answer created successfully\n")
@@ -108,9 +106,7 @@ def handle_offer(sdp_info):
             GstWebRTC.WebRTCSDPType.OFFER, sdp_msg
         )
 
-        promise_remote = Gst.Promise.new()
-        webrtc.emit("set-remote-description", offer, promise_remote)
-        promise_remote.wait()
+        webrtc.emit("set-remote-description", offer, None)
 
         promise_answer = Gst.Promise.new_with_change_func(on_answer_created, None)
         webrtc.emit("create-answer", None, promise_answer)

@@ -51,11 +51,28 @@ pipeline_str = (
 pipeline = Gst.parse_launch(pipeline_str)
 webrtc = pipeline.get_by_name("webrtc")
 
+def on_deep_element_added(pipeline, bin, element):
+    try:
+        if element.has_property("min-rtp-port"):
+            element.set_property("min-rtp-port", 10000)
+            element.set_property("max-rtp-port", 10100)
+        if element.has_property("agent"):
+            agent = element.get_property("agent")
+            if agent:
+                agent.set_property("min-rtp-port", 10000)
+                agent.set_property("max-rtp-port", 10100)
+    except Exception as e:
+        sys.stderr.write(f"Err setting port range on element {element.get_name()}: {e}\n")
+
+pipeline.connect("deep-element-added", on_deep_element_added)
+
 def send_json(msg):
     sys.stdout.write(json.dumps(msg) + "\n")
     sys.stdout.flush()
 
 def on_ice_candidate(element, mline_index, candidate):
+    sys.stderr.write(f"ICE candidate gathered: {candidate}\n")
+    sys.stderr.flush()
     send_json({
         "type": "ice",
         "candidate": {

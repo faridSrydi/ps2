@@ -41,12 +41,8 @@ if has_nvenc:
 else:
     video_enc = f"x264enc tune=zerolatency bitrate={bitrate} speed-preset=ultrafast key-int-max=30"
 
+# Use silent audio source — PulseAudio daemon is not running in headless Docker
 audio_src = "audiotestsrc is-live=true wave=silence"
-try:
-    if Gst.ElementFactory.find("pulsesrc"):
-        audio_src = "pulsesrc"
-except Exception:
-    pass
 
 pipeline_str = (
     f"ximagesrc display-name={display} use-damage=false show-pointer=false "
@@ -133,6 +129,31 @@ def read_stdin():
         except Exception as e:
             sys.stderr.write(f"Err processing stdin: {e}\n")
             sys.stderr.flush()
+
+# Log pipeline errors
+bus = pipeline.get_bus()
+bus.add_signal_watch()
+def on_bus_message(bus, msg):
+    t = msg.type
+    if t == Gst.MessageType.ERROR:
+        err, dbg = msg.parse_error()
+        sys.stderr.write(f"GST ERROR: {err.message}\n")
+        if dbg:
+            sys.stderr.write(f"GST DEBUG: {dbg}\n")
+        sys.stderr.flush()
+    elif t == Gst.MessageType.WARNING:
+        err, dbg = msg.parse_warning()
+        sys.stderr.write(f"GST WARN: {err.message}\n")
+        sys.stderr.flush()
+    elif t == Gst.MessageType.STATE_CHANGED:
+        if msg.src == pipeline:
+            old, new, pending = msg.parse_state_changed()
+            sys.stderr.write(f"Pipeline state: {old.value_nick} -> {new.value_nick}\n")
+            sys.stderr.flush()
+bus.connect('message', on_bus_message)
+
+sys.stderr.write(f"Starting pipeline: {pipeline_str}\n")
+sys.stderr.flush()
 
 pipeline.set_state(Gst.State.PLAYING)
 

@@ -24,7 +24,7 @@ export default function PlaySession() {
   const [isControllerConnected, setIsControllerConnected] = useState(false);
 
   const { socket, connected: socketConnected } = useSocket();
-  const { videoRef, streamState, stats, startStream, stopStream } = useWebRTC(socket, id);
+  const { videoRef, streamState, errorReason, stats, startStream, stopStream } = useWebRTC(socket, id);
 
   // Load session data
   useEffect(() => {
@@ -150,6 +150,7 @@ export default function PlaySession() {
       <StreamPlayer
         videoRef={videoRef}
         streamState={streamState}
+        errorReason={errorReason}
         stats={stats}
       />
 

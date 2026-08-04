@@ -174,6 +174,10 @@ export async function stopStream(sessionId) {
   }
 }
 
+export function isStreamActive(sessionId) {
+  return activePipelines.has(sessionId);
+}
+
 /**
  * Get info about all active streaming pipelines
  */

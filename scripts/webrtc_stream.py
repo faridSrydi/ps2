@@ -53,19 +53,21 @@ webrtc = pipeline.get_by_name("webrtc")
 
 
 
-# Configure NiceAgent port range directly on webrtcbin (forces 10000-10100 range)
-try:
-    nice_agent = webrtc.get_property("nice-agent")
-    if nice_agent:
-        nice_agent.set_property("min-rtp-port", 10000)
-        nice_agent.set_property("max-rtp-port", 10100)
-        sys.stderr.write("✓ Successfully set min-rtp-port and max-rtp-port on NiceAgent!\n")
-    else:
-        sys.stderr.write("✗ nice-agent property not found on webrtcbin!\n")
-    sys.stderr.flush()
-except Exception as e:
-    sys.stderr.write(f"Err configuring NiceAgent: {e}\n")
-    sys.stderr.flush()
+# Configure NiceAgent port range dynamically as elements are added
+def on_deep_element_added(pipeline, bin, element):
+    try:
+        if element.find_property("agent"):
+            agent = element.get_property("agent")
+            if agent and agent.find_property("min-rtp-port"):
+                agent.set_property("min-rtp-port", 10000)
+                agent.set_property("max-rtp-port", 10100)
+                sys.stderr.write(f"✓ Configured port range 10000-10100 on {element.get_name()}\n")
+                sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f"Err configuring element {element.get_name()}: {e}\n")
+        sys.stderr.flush()
+
+pipeline.connect("deep-element-added", on_deep_element_added)
 
 def send_json(msg):
     sys.stdout.write(json.dumps(msg) + "\n")

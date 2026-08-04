@@ -44,6 +44,8 @@ export async function startStream(sessionId, displayNumber) {
       env: {
         ...process.env,
         DISPLAY: display,
+        XDG_RUNTIME_DIR: '/tmp/runtime-root',
+        GST_DEBUG: '2',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });

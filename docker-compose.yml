@@ -36,7 +36,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      PORT: 3000
+      PORT: 3005
       DATABASE_URL: postgresql://ps2user:ps2password@127.0.0.1:5432/ps2cloud?schema=public
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-production}

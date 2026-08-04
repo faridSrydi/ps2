@@ -77,6 +77,32 @@ export async function startStream(sessionId, displayNumber) {
 
     logger.info(`[streaming] ✓ WebRTC streamer started for session ${sessionId}`);
 
+    // Set up stdout listener immediately
+    process.stdout.on('data', (data) => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line.trim());
+          if (msg.type === 'offer') {
+            logger.info(`[streaming] Offer received from Python for session ${sessionId}`);
+            logger.info(`[streaming] Offer sent to Browser for session ${sessionId}`);
+            io.to(`session:${sessionId}`).emit('signal:offer', { sdp: msg.sdp });
+          } else if (msg.type === 'answer' && pipeline.socketId) {
+            logger.info(`[streaming] Answer received from Python for session ${sessionId}`);
+            logger.info(`[streaming] Answer sent to Browser for session ${sessionId}`);
+            io.to(pipeline.socketId).emit('signal:answer', { sdp: msg.sdp });
+          } else if (msg.type === 'ice') {
+            logger.info(`[streaming] ICE received from Python for session ${sessionId}`);
+            logger.info(`[streaming] ICE forwarded to Browser for session ${sessionId}`);
+            io.to(`session:${sessionId}`).emit('signal:ice-candidate', { candidate: msg.candidate });
+          }
+        } catch {
+          // ignore non-json logs
+        }
+      }
+    });
+
     // If offer arrived before pipeline was ready, process it now
     if (pendingOffers.has(sessionId)) {
       logger.info(`[streaming] Processing queued offer for session ${sessionId}`);
@@ -107,34 +133,20 @@ export function handleOffer(sessionId, sdp, socketId, io) {
   pipeline.io = io;
   pipeline.socketId = socketId;
 
-  // Set up stdout listener once offer arrives
-  if (!pipeline.listening) {
-    pipeline.listening = true;
-    pipeline.process.stdout.on('data', (data) => {
-      const lines = data.toString().split('\n');
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const msg = JSON.parse(line.trim());
-          if (msg.type === 'answer' && pipeline.socketId) {
-            logger.info(`[streaming] Answer received from Python for session ${sessionId}`);
-            logger.info(`[streaming] Answer sent to Browser for session ${sessionId}`);
-            io.to(pipeline.socketId).emit('signal:answer', { sdp: msg.sdp });
-          } else if (msg.type === 'ice' && pipeline.socketId) {
-            logger.info(`[streaming] ICE received from Python for session ${sessionId}`);
-            logger.info(`[streaming] ICE forwarded to Browser for session ${sessionId}`);
-            io.to(pipeline.socketId).emit('signal:ice-candidate', { candidate: msg.candidate });
-          }
-        } catch {
-          // ignore non-json logs
-        }
-      }
-    });
-  }
-
   // Send offer to python streamer via stdin
   logger.info(`[streaming] Offer forwarded to Python for session ${sessionId}`);
   pipeline.process.stdin.write(JSON.stringify({ type: 'offer', sdp }) + '\n');
+}
+
+/**
+ * Handle WebRTC Answer from client
+ */
+export function handleAnswer(sessionId, sdp) {
+  logger.info(`[streaming] Answer received from Browser for session ${sessionId}`);
+  const pipeline = activePipelines.get(sessionId);
+  if (!pipeline) return;
+  logger.info(`[streaming] Answer forwarded to Python for session ${sessionId}`);
+  pipeline.process.stdin.write(JSON.stringify({ type: 'answer', sdp }) + '\n');
 }
 
 /**

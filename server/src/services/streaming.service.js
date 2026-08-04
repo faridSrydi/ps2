@@ -7,22 +7,21 @@ import { spawn, execSync } from 'child_process';
 import config from '../config/env.js';
 import logger from '../utils/logger.js';
 
-// Track active streaming pipelines: sessionId → { process, port }
+// Track active streaming pipelines: sessionId → { process, port, io }
 const activePipelines = new Map();
-const pendingOffers = new Map();
 
 // Port allocator for WebRTC
 let nextPort = config.streaming.portMin;
 
 /**
  * Start a GStreamer streaming pipeline for a session.
- * Captures the Xvfb display, encodes with NVENC, and serves via WebRTC.
  *
  * @param {string} sessionId - Session UUID
  * @param {number} displayNumber - Xvfb display number
+ * @param {object} io - Socket.io Instance
  * @returns {{ port: number }}
  */
-export async function startStream(sessionId, displayNumber) {
+export async function startStream(sessionId, displayNumber, io) {
   const port = allocatePort();
   const display = `:${displayNumber}`;
   const resolution = config.streaming.resolution;
@@ -33,7 +32,7 @@ export async function startStream(sessionId, displayNumber) {
   logger.info(`[streaming] Starting WebRTC Python streamer for session ${sessionId} | Display ${display}`);
 
   try {
-    // Wait for Xvfb display to be ready (PCSX2 needs time to start rendering)
+    // Wait for Xvfb display to be ready
     await waitForDisplay(display, 10000);
 
     const pythonScript = '/app/scripts/webrtc_stream.py';
@@ -53,6 +52,37 @@ export async function startStream(sessionId, displayNumber) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
+    activePipelines.set(sessionId, {
+      process: gstProcess,
+      port,
+      displayNumber,
+      io,
+    });
+
+    // 1. TANGKAP STDOUT DARI PYTHON STREAMER (FIXED: gstProcess.stdout)
+    gstProcess.stdout.on('data', (data) => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line.trim());
+          
+          // Python ngirim OFFER -> Forward ke Browser Client
+          if (msg.type === 'offer') {
+            logger.info(`[streaming] SDP Offer received from Python for session ${sessionId}`);
+            io.to(`session:${sessionId}`).emit('signal:offer', { sdp: msg.sdp });
+          } 
+          // Python ngirim ICE Candidate -> Forward ke Browser Client
+          else if (msg.type === 'ice') {
+            logger.info(`[streaming] ICE candidate received from Python for session ${sessionId}`);
+            io.to(`session:${sessionId}`).emit('signal:ice-candidate', { candidate: msg.candidate });
+          }
+        } catch {
+          // Abaikan log biasa dari GStreamer
+        }
+      }
+    });
+
     gstProcess.stderr.on('data', (data) => {
       logger.info(`[gst:${sessionId}] ${data.toString().trim()}`);
     });
@@ -60,58 +90,15 @@ export async function startStream(sessionId, displayNumber) {
     gstProcess.on('exit', (code) => {
       logger.info(`[streaming] Pipeline ${sessionId} exited with code ${code}`);
       activePipelines.delete(sessionId);
-      pendingOffers.delete(sessionId);
     });
 
     gstProcess.on('error', (err) => {
       logger.error(`[streaming] Pipeline ${sessionId} error:`, err);
     });
 
-    activePipelines.set(sessionId, {
-      process: gstProcess,
-      port,
-      displayNumber,
-      io: null,
-      socketId: null,
-    });
-
     logger.info(`[streaming] ✓ WebRTC streamer started for session ${sessionId}`);
-
-    // Set up stdout listener immediately
-    process.stdout.on('data', (data) => {
-      const lines = data.toString().split('\n');
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const msg = JSON.parse(line.trim());
-          if (msg.type === 'offer') {
-            logger.info(`[streaming] Offer received from Python for session ${sessionId}`);
-            logger.info(`[streaming] Offer sent to Browser for session ${sessionId}`);
-            io.to(`session:${sessionId}`).emit('signal:offer', { sdp: msg.sdp });
-          } else if (msg.type === 'answer' && pipeline.socketId) {
-            logger.info(`[streaming] Answer received from Python for session ${sessionId}`);
-            logger.info(`[streaming] Answer sent to Browser for session ${sessionId}`);
-            io.to(pipeline.socketId).emit('signal:answer', { sdp: msg.sdp });
-          } else if (msg.type === 'ice') {
-            logger.info(`[streaming] ICE received from Python for session ${sessionId}`);
-            logger.info(`[streaming] ICE forwarded to Browser for session ${sessionId}`);
-            io.to(`session:${sessionId}`).emit('signal:ice-candidate', { candidate: msg.candidate });
-          }
-        } catch {
-          // ignore non-json logs
-        }
-      }
-    });
-
-    // If offer arrived before pipeline was ready, process it now
-    if (pendingOffers.has(sessionId)) {
-      logger.info(`[streaming] Processing queued offer for session ${sessionId}`);
-      const pending = pendingOffers.get(sessionId);
-      pendingOffers.delete(sessionId);
-      handleOffer(sessionId, pending.sdp, pending.socketId, pending.io);
-    }
-
     return { port };
+
   } catch (error) {
     logger.error(`[streaming] Failed to start pipeline for ${sessionId}:`, error);
     throw error;
@@ -119,45 +106,29 @@ export async function startStream(sessionId, displayNumber) {
 }
 
 /**
- * Handle WebRTC Offer from client
- */
-export function handleOffer(sessionId, sdp, socketId, io) {
-  logger.info(`[streaming] Offer received for session ${sessionId} from browser ${socketId}`);
-  const pipeline = activePipelines.get(sessionId);
-  if (!pipeline) {
-    logger.info(`[streaming] Offer received before pipeline ready for ${sessionId}, queuing...`);
-    pendingOffers.set(sessionId, { sdp, socketId, io });
-    return;
-  }
-
-  pipeline.io = io;
-  pipeline.socketId = socketId;
-
-  // Send offer to python streamer via stdin
-  logger.info(`[streaming] Offer forwarded to Python for session ${sessionId}`);
-  pipeline.process.stdin.write(JSON.stringify({ type: 'offer', sdp }) + '\n');
-}
-
-/**
- * Handle WebRTC Answer from client
+ * Handle WebRTC Answer from browser client -> Send to Python STDIN
  */
 export function handleAnswer(sessionId, sdp) {
   logger.info(`[streaming] Answer received from Browser for session ${sessionId}`);
   const pipeline = activePipelines.get(sessionId);
   if (!pipeline) return;
-  logger.info(`[streaming] Answer forwarded to Python for session ${sessionId}`);
-  pipeline.process.stdin.write(JSON.stringify({ type: 'answer', sdp }) + '\n');
+
+  const payload = JSON.stringify({ type: 'answer', sdp }) + '\n';
+  pipeline.process.stdin.write(payload);
+  logger.info(`[streaming] Answer forwarded to Python STDIN for session ${sessionId}`);
 }
 
 /**
- * Handle ICE candidate from client
+ * Handle ICE candidate from browser client -> Send to Python STDIN
  */
 export function handleIceCandidate(sessionId, candidate) {
   logger.info(`[streaming] ICE received from Browser for session ${sessionId}`);
   const pipeline = activePipelines.get(sessionId);
   if (!pipeline) return;
-  logger.info(`[streaming] ICE forwarded to Python for session ${sessionId}`);
-  pipeline.process.stdin.write(JSON.stringify({ type: 'ice', candidate }) + '\n');
+
+  const payload = JSON.stringify({ type: 'ice', candidate }) + '\n';
+  pipeline.process.stdin.write(payload);
+  logger.info(`[streaming] ICE candidate forwarded to Python STDIN for session ${sessionId}`);
 }
 
 /**
@@ -165,23 +136,14 @@ export function handleIceCandidate(sessionId, candidate) {
  */
 export async function stopStream(sessionId) {
   const pipeline = activePipelines.get(sessionId);
-
   if (pipeline) {
     logger.info(`[streaming] Stopping pipeline for session ${sessionId}`);
-
     try {
       pipeline.process.kill('SIGINT');
       setTimeout(() => {
-        try {
-          pipeline.process.kill('SIGKILL');
-        } catch {
-          // Already dead
-        }
+        try { pipeline.process.kill('SIGKILL'); } catch {}
       }, 3000);
-    } catch {
-      // Process already terminated
-    }
-
+    } catch {}
     activePipelines.delete(sessionId);
   }
 }
@@ -190,9 +152,6 @@ export function isStreamActive(sessionId) {
   return activePipelines.has(sessionId);
 }
 
-/**
- * Get info about all active streaming pipelines
- */
 export function getActivePipelines() {
   const result = [];
   for (const [sessionId, info] of activePipelines) {
@@ -214,11 +173,6 @@ function allocatePort() {
   return port;
 }
 
-/**
- * Wait until an X display is ready by polling xdpyinfo.
- * @param {string} display - e.g. ":10"
- * @param {number} timeoutMs - max wait time
- */
 async function waitForDisplay(display, timeoutMs = 10000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -233,4 +187,4 @@ async function waitForDisplay(display, timeoutMs = 10000) {
   logger.warn(`[streaming] Display ${display} not ready after ${timeoutMs}ms, proceeding anyway`);
 }
 
-export default { startStream, stopStream, getActivePipelines, handleOffer, handleIceCandidate };
+export default { startStream, stopStream, getActivePipelines, handleAnswer, handleIceCandidate, isStreamActive };

@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { HiWifi, HiExclamation } from 'react-icons/hi';
 
-export default function StreamPlayer({ videoRef, streamState, stats }) {
+export default function StreamPlayer({ videoRef, streamState, errorReason, stats }) {
   const [fullscreen, setFullscreen] = useState(false);
   const containerRef = useRef(null);
 
@@ -64,7 +64,10 @@ export default function StreamPlayer({ videoRef, streamState, stats }) {
           </div>
           <div>
             <h3 className="font-bold text-lg text-white">Stream Connection Failed</h3>
-            <p className="text-sm text-gray-400 max-w-sm">
+            <p className="text-sm text-red-400 font-mono mt-1 mb-2 bg-red-950/50 px-2 py-1 rounded border border-red-500/20 max-w-sm mx-auto">
+              Reason: {errorReason || 'ICE timeout'}
+            </p>
+            <p className="text-xs text-gray-400 max-w-sm">
               Could not establish WebRTC connection with the emulator server. Check server status or GPU configuration.
             </p>
           </div>

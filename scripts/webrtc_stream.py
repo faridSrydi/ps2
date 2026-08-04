@@ -27,19 +27,9 @@ if stun_server.startswith("stun:") and not stun_server.startswith("stun://"):
 
 width, height = resolution.split('x')
 
-# Detect if nvh264enc is available
-has_nvenc = False
-try:
-    factory = Gst.ElementFactory.find("nvh264enc")
-    if factory:
-        has_nvenc = True
-except Exception:
-    pass
-
-if has_nvenc:
-    video_enc = f"nvh264enc bitrate={bitrate} preset=low-latency-hq rc-mode=cbr zerolatency=true gop-size=30"
-else:
-    video_enc = f"x264enc tune=zerolatency bitrate={bitrate} speed-preset=ultrafast key-int-max=30"
+# Use software eancoder — nvh264enc plugin is found but NVENC runtime
+# fails inside Docker ("Could not configure supporting library")
+video_enc = f"x264enc tune=zerolatency bitrate={bitrate} speed-preset=ultrafast key-int-max=30"
 
 # Use silent audio source — PulseAudio daemon is not running in headless Docker
 audio_src = "audiotestsrc is-live=true wave=silence"

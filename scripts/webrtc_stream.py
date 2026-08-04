@@ -51,6 +51,36 @@ pipeline_str = (
 pipeline = Gst.parse_launch(pipeline_str)
 webrtc = pipeline.get_by_name("webrtc")
 
+def configure_nice_elements(pipeline):
+    try:
+        iterator = pipeline.iterate_recurse()
+        while True:
+            res, element = iterator.next()
+            if res == Gst.IteratorResult.DONE:
+                break
+            elif res == Gst.IteratorResult.OK:
+                name = element.get_name()
+                if element.find_property("min-rtp-port"):
+                    element.set_property("min-rtp-port", 10000)
+                    element.set_property("max-rtp-port", 10100)
+                    sys.stderr.write(f"✓ Set min/max rtp port on {name}\n")
+                elif element.find_property("agent"):
+                    agent = element.get_property("agent")
+                    if agent and agent.find_property("min-rtp-port"):
+                        agent.set_property("min-rtp-port", 10000)
+                        agent.set_property("max-rtp-port", 10100)
+                        sys.stderr.write(f"✓ Set agent min/max rtp port on {name}\n")
+            elif res == Gst.IteratorResult.RESYNC:
+                iterator.resync()
+            else:
+                break
+        sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f"Err setting port range on init: {e}\n")
+        sys.stderr.flush()
+
+configure_nice_elements(pipeline)
+
 def on_deep_element_added(pipeline, bin, element):
     try:
         if element.find_property("min-rtp-port"):

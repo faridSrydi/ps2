@@ -22,6 +22,8 @@ resolution = sys.argv[2] if len(sys.argv) > 2 else "1280x720"
 fps = sys.argv[3] if len(sys.argv) > 3 else "60"
 bitrate = sys.argv[4] if len(sys.argv) > 4 else "3000"
 stun_server = sys.argv[5] if len(sys.argv) > 5 else "stun://stun.l.google.com:19302"
+if stun_server.startswith("stun:") and not stun_server.startswith("stun://"):
+    stun_server = stun_server.replace("stun:", "stun://")
 
 width, height = resolution.split('x')
 

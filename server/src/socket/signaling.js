@@ -3,7 +3,7 @@
 // Handles SDP offer/answer and ICE candidate exchange
 // ============================================================
 
-import { handleOffer, handleIceCandidate, isStreamActive } from '../services/streaming.service.js';
+import { handleOffer, handleAnswer, handleIceCandidate, isStreamActive } from '../services/streaming.service.js';
 import logger from '../utils/logger.js';
 
 // Track which socket is viewing which session
@@ -75,14 +75,9 @@ export function setupSignaling(io, socket) {
    * WebRTC SDP Answer
    * Event: signal:answer { sessionId, sdp, to }
    */
-  socket.on('signal:answer', ({ sessionId, sdp, to }) => {
-    logger.info(`[signaling] Answer for session ${sessionId}`);
-
-    if (to) {
-      io.to(to).emit('signal:answer', { sdp });
-    } else {
-      socket.to(`session:${sessionId}`).emit('signal:answer', { sdp });
-    }
+  socket.on('signal:answer', ({ sessionId, sdp }) => {
+    logger.info(`[signaling] Answer received from ${socket.id} for session ${sessionId}`);
+    handleAnswer(sessionId, sdp);
   });
 
   /**

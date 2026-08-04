@@ -38,10 +38,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgstreamer1.0-dev \
     # NVIDIA GStreamer plugins (NVENC)
     gstreamer1.0-vaapi \
-    # Vulkan support for PCSX2
+    # Vulkan & OpenGL support for PCSX2
     mesa-vulkan-drivers \
     vulkan-tools \
     libvulkan1 \
+    libopengl0 \
+    libgl1 \
+    libglx0 \
+    libegl1 \
+    libdbus-1-3 \
+    libfontconfig1 \
     # Virtual gamepad
     libevdev-dev \
     # Misc

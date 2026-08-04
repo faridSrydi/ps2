@@ -58,6 +58,7 @@ services:
       - ./covers:/app/covers             # Cover art
       - ./screenshots:/app/screenshots   # Screenshots
       - ./config:/app/config             # PCSX2 configs
+      - ./scripts:/app/scripts           # Scripts & Streamer
       - ./logs:/app/logs                 # Application logs
       - ./storage:/app/storage           # General storage
     deploy:

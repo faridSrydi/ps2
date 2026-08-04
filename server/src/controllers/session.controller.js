@@ -20,7 +20,7 @@ export async function createSession(req, res) {
     const { gameId } = req.body;
     const userId = req.user.id;
 
-    // Check if user already has an active session
+    // Check if user already has an active session and auto-stop it
     const activeSession = await prisma.session.findFirst({
       where: {
         userId,
@@ -29,11 +29,17 @@ export async function createSession(req, res) {
     });
 
     if (activeSession) {
-      return res.status(409).json({
-        success: false,
-        message: 'You already have an active session. Stop it before starting a new one.',
-        data: { sessionId: activeSession.id, roomId: activeSession.roomId },
-      });
+      logger.info(`[session] Auto-stopping previous active session ${activeSession.id} for user ${userId}`);
+      try {
+        await stopEmulator(activeSession.id, activeSession.pcsx2Pid);
+        await stopStream(activeSession.id);
+        await prisma.session.update({
+          where: { id: activeSession.id },
+          data: { status: 'STOPPED', endedAt: new Date() },
+        });
+      } catch (err) {
+        logger.warn(`[session] Failed to auto-stop previous session ${activeSession.id}:`, err);
+      }
     }
 
     // Check max concurrent sessions

@@ -86,6 +86,24 @@ def on_ice_candidate(element, mline_index, candidate):
 
 webrtc.connect("on-ice-candidate", on_ice_candidate)
 
+def on_local_desc_set(promise, user_data):
+    try:
+        reply = promise.get_reply()
+        sys.stderr.write("✓ GStreamer Local description set successfully\n")
+        sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f"Err setting local description: {e}\n")
+        sys.stderr.flush()
+
+def on_remote_desc_set(promise, user_data):
+    try:
+        reply = promise.get_reply()
+        sys.stderr.write("✓ GStreamer Remote description set successfully\n")
+        sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f"Err setting remote description: {e}\n")
+        sys.stderr.flush()
+
 def on_answer_created(promise, user_data):
     try:
         sys.stderr.write("Creating SDP answer...\n")
@@ -98,7 +116,8 @@ def on_answer_created(promise, user_data):
 
         answer = reply.get_value("answer")
 
-        webrtc.emit("set-local-description", answer, None)
+        promise_local = Gst.Promise.new_with_change_func(on_local_desc_set, None)
+        webrtc.emit("set-local-description", answer, promise_local)
 
         sdp_text = answer.sdp.as_text()
         sys.stderr.write("✓ SDP answer created successfully\n")
@@ -126,7 +145,8 @@ def handle_offer(sdp_info):
             GstWebRTC.WebRTCSDPType.OFFER, sdp_msg
         )
 
-        webrtc.emit("set-remote-description", offer, None)
+        promise_remote = Gst.Promise.new_with_change_func(on_remote_desc_set, None)
+        webrtc.emit("set-remote-description", offer, promise_remote)
 
         promise_answer = Gst.Promise.new_with_change_func(on_answer_created, None)
         webrtc.emit("create-answer", None, promise_answer)

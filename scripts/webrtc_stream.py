@@ -27,17 +27,20 @@ if stun_server.startswith("stun:") and not stun_server.startswith("stun://"):
 
 width, height = resolution.split('x')
 
-# Use software eancoder — nvh264enc plugin is found but NVENC runtime
-# fails inside Docker ("Could not configure supporting library")
-video_enc = f"x264enc tune=zerolatency bitrate={bitrate} speed-preset=ultrafast key-int-max=30"
+# Use software encoder with explicit I420 format conversion (prevents 4:4:4 profile errors)
+video_enc = (
+    f"videoconvert ! video/x-raw,format=I420 ! "
+    f"x264enc tune=zerolatency bitrate={bitrate} speed-preset=ultrafast key-int-max=30 ! "
+    f"video/x-h264,profile=baseline"
+)
 
 # Use silent audio source — PulseAudio daemon is not running in headless Docker
 audio_src = "audiotestsrc is-live=true wave=silence"
 
 pipeline_str = (
     f"ximagesrc display-name={display} use-damage=false show-pointer=false "
-    f"! video/x-raw,framerate={fps}/1 ! videoconvert ! videoscale "
-    f"! video/x-raw,format=I420,width={width},height={height} "
+    f"! video/x-raw,framerate={fps}/1 ! videoscale "
+    f"! video/x-raw,width={width},height={height} "
     f"! {video_enc} ! rtph264pay config-interval=-1 pt=96 "
     f"! webrtc. "
     f"{audio_src} ! audioconvert ! audioresample ! opusenc bitrate=128000 frame-size=10 ! rtpopuspay pt=97 "

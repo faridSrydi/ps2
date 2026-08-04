@@ -33,12 +33,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    network_mode: "host"
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://ps2user:ps2password@postgres:5432/ps2cloud?schema=public
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-production}
+      DATABASE_URL: postgresql://ps2user:ps2password@127.0.0.1:5432/ps2cloud?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production} 
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-m
+       e-refresh-production}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       GAMES_DIR: /app/games
       BIOS_DIR: /app/bios
@@ -48,9 +50,6 @@ services:
       CONFIG_DIR: /app/config
       LOGS_DIR: /app/logs
       STORAGE_DIR: /app/storage
-    ports:
-      - "3001:3000"
-      - "10000-10100:10000-10100/udp"  # WebRTC UDP ports
     volumes:
       - ./games:/app/games:ro            # Game ISOs (read-only)
       - ./bios:/app/bios:ro             # PS2 BIOS (read-only)
@@ -76,6 +75,8 @@ services:
     restart: unless-stopped
     depends_on:
       - server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:80"
       - "8443:443"

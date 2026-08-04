@@ -38,11 +38,12 @@ export async function launchEmulator(sessionId, gamePath) {
     // 1. Start Xvfb (virtual display)
     const [width, height] = config.streaming.resolution.split('x');
 
-    // Remove stale lock files from previous runs (docker restart preserves /tmp)
+    // Ensure /tmp/.X11-unix directory exists and remove stale lock files
     try {
-      const { unlinkSync } = await import('fs');
-      const lockFile = `/tmp/.X${displayNumber}-lock`;
-      try { unlinkSync(lockFile); } catch { /* doesn't exist */ }
+      const { mkdirSync, unlinkSync } = await import('fs');
+      try { mkdirSync('/tmp/.X11-unix', { recursive: true }); } catch { /* exists */ }
+      try { mkdirSync('/tmp/runtime-root', { recursive: true }); } catch { /* exists */ }
+      try { unlinkSync(`/tmp/.X${displayNumber}-lock`); } catch { /* doesn't exist */ }
       try { unlinkSync(`/tmp/.X11-unix/X${displayNumber}`); } catch { /* doesn't exist */ }
     } catch { /* ignore */ }
 
@@ -67,14 +68,24 @@ export async function launchEmulator(sessionId, gamePath) {
 
     xvfb.unref();
 
-    // Wait for Xvfb to initialize and verify it's accessible
-    await sleep(1500);
-    try {
-      const { execSync } = await import('child_process');
-      execSync(`xdpyinfo -display ${display}`, { stdio: 'ignore', timeout: 3000 });
+    // Wait for Xvfb to initialize with retry loop
+    let displayReady = false;
+    const { execSync } = await import('child_process');
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      await sleep(300);
+      try {
+        execSync(`xdpyinfo -display ${display}`, { stdio: 'ignore', timeout: 2000 });
+        displayReady = true;
+        break;
+      } catch {
+        // Retry
+      }
+    }
+
+    if (displayReady) {
       logger.info(`[emulator] ✓ Xvfb display ${display} is ready`);
-    } catch {
-      logger.error(`[emulator] ✗ Xvfb display ${display} is NOT accessible — streaming will fail`);
+    } else {
+      logger.error(`[emulator] ✗ Xvfb display ${display} is NOT accessible — streaming may fail`);
     }
 
     // 2. Launch PCSX2
@@ -89,6 +100,8 @@ export async function launchEmulator(sessionId, gamePath) {
       env: {
         ...process.env,
         DISPLAY: display,
+        XDG_RUNTIME_DIR: '/tmp/runtime-root',
+        QT_QPA_PLATFORM: 'xcb',
         // Use Vulkan renderer for GPU acceleration
         MESA_VK_DEVICE_SELECT: '10de:',  // Prefer NVIDIA
       },
